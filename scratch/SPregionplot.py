@@ -377,6 +377,8 @@ def inducedpolforplot_Scen5_deltw(numpts, Ltheta_vec, lambsup1, lambdelt, b, c, 
             #print(str(ls) + ' ' + str(a) + ': ' + str(inducepolicymat[lsind, aind]))
     return inducepolicymat
 
+numpts = 15  # MODIFY AS NEEDED
+
 inducepolicymat_deltlamb = inducedpolforplot_Scen5_deltlamb(numpts, Ltheta_vec, lambsup1, b_0, c_0, w_0, w12_delt_0,
                                                      lambretlo_0, lambrethi_0, sens_0, fpr_0)
 
@@ -394,19 +396,20 @@ values = [0, 1, 2, 3, 4, 5, 6]
 labels = ['{Y12}', '{N12}', '{Y1}', '{N1}', '{Y2}', '{N2}', '{N}']
 cmapname = 'viridis'
 
-fig = plt.figure()
+fig = plt.figure(figsize=(20,10))
 fig.suptitle('Scenario 5: '+r'$\Lambda_1=\Lambda_2+\Delta\Lambda,w_1=w_2+\Delta w$', fontsize=18, fontweight='bold')
-ax1 = fig.add_subplot(211)
-ax2 = fig.add_subplot(223)
-ax3 = fig.add_subplot(224)
-fig.subplots_adjust(bottom=0.5)
+ax1 = plt.subplot2grid((3, 2), (0,0), colspan=2)
+ax2 = plt.subplot2grid((3, 2), (1,0), rowspan=2)
+ax3 = plt.subplot2grid((3, 2), (1,1), rowspan=2)
 
-im2 = ax2.imshow(inducepolicymat_deltlamb, vmin=-1, vmax=values[-1],
+fig.subplots_adjust(bottom=0.3)
+
+im2 = ax2.imshow(inducepolicymat_deltlamb, vmin=0, vmax=values[-1],
                 extent=(al_lambgrid.min(), al_lambgrid.max(), deltlambgrid.min(), deltlambgrid.max()),
-                origin="lower", cmap=cmapname)
-im3 = ax3.imshow(inducepolicymat_wlamb, vmin=-1, vmax=values[-1],
+                origin="lower", cmap=cmapname, interpolation='none')
+im3 = ax3.imshow(inducepolicymat_wlamb, vmin=0, vmax=values[-1],
                 extent=(al_wgrid.min(), al_wgrid.max(),deltwgrid.min(), deltwgrid.max()),
-                origin="lower", cmap=cmapname)
+                origin="lower", cmap=cmapname, interpolation='none')
 colors = [im2.cmap(im2.norm(value)) for value in values]
 
 lambsup1, alph = 0.8, 0.9
@@ -421,16 +424,19 @@ retpolicy_mat = RetPolicyWRTLtheta_Scen5(lambsup1, lambsup1-lamb12_delt_0, alph,
 [line5] = ax1.plot(Ltheta_vec, retpolicy_mat[5], linewidth=7, color=colors[5])
 [line6] = ax1.plot(Ltheta_vec, retpolicy_mat[6], linewidth=7, color=colors[6])
 
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+from mpl_toolkits.axes_grid1.axes_divider import make_axes_area_auto_adjustable
+
 ax1.set_xlim([0, 2.0])
 ax1.set_ylim([-0.6, 0.8])
 ax1.set_title('SP utility vs retailer strategy, as function of '+r'$L_{\theta}$')
 ax1.set_xlabel(r'$L_\theta$', fontsize=12)
-ax1.set_ylabel(r'$U_{SP}$', rotation=0, fontsize=12, labelpad=3)
+ax1.set_ylabel(r'$U_{SP}$', rotation=0, fontsize=12, labelpad=15)
 
 # Add sliders for changing the parameters
-slstrtval = 0.43
+slstrtval = 0.28
 slht = 0.01
-slvertgap = 0.03
+slvertgap = 0.02
 b_slider_ax = fig.add_axes([0.1, slstrtval, 0.65, slht])
 b_slider = Slider(b_slider_ax, 'b', 0.01, 0.99, valinit=b_0)
 c_slider_ax = fig.add_axes([0.1, slstrtval-slvertgap, 0.65, slht])
@@ -452,26 +458,24 @@ lambsup1_slider = Slider(lambsup1_slider_ax, r'$\Lambda_1$', 0.01, 0.99, valinit
 lambdelt_slider_ax = fig.add_axes([0.1, slstrtval-slvertgap*9, 0.65, slht])
 lambdelt_slider = Slider(lambdelt_slider_ax, r'$\Delta\Lambda$', 0.01, 0.5, valinit=lamb12_delt_0)
 
-alpha_slider_ax = fig.add_axes([0.3, slstrtval-slvertgap*9-0.07, 0.35, slht])
+alpha_slider_ax = fig.add_axes([0.3, slstrtval-slvertgap*9-slht*4, 0.35, slht])
 alpha_slider = Slider(alpha_slider_ax, r'$\alpha$', 0.01, 0.99, valinit=alph)
 
 
 ax2.set_xlim([0, 1])
-#ax2.set_ylim([0, 1])
 ax2.set_title('SPs best induced retailer strategy')
 ax2.set_xlabel(r'$\alpha$', fontsize=12)
-ax2.set_ylabel(r'$\Delta\Lambda$', rotation=0, fontsize=12, labelpad=3)
+ax2.set_ylabel(r'$\Delta\Lambda$', rotation=0, fontsize=12, labelpad=15)
 
 ax3.set_xlim([0, 1])
-#ax3.set_ylim([0, 0.5])
 ax3.set_title('SPs best induced retailer strategy')
 ax3.set_xlabel(r'$\alpha$', fontsize=12)
-ax3.set_ylabel(r'$\Delta w$', rotation=0, fontsize=12, labelpad=3)
+ax3.set_ylabel(r'$\Delta w$', rotation=0, fontsize=12, labelpad=15)
 
 # create a patch (proxy artist) for every color
 patches = [mpatches.Patch(color=colors[i], label=labels[i]) for i in range(len(values))]
 # put those patched as legend-handles into the legend
-ax2.legend(handles=patches, bbox_to_anchor=(2.0, 1.0), loc='upper right', borderaxespad=0.1, fontsize=14)
+fig.legend(handles=patches, loc='upper left', borderaxespad=0.05, fontsize=12)
 def sliders_on_changed(val):
     retpolicy_mat = RetPolicyWRTLtheta_Scen5(lambsup1_slider.val, lambsup1_slider.val-lambdelt_slider.val,
                                              alpha_slider.val, Ltheta_vec, b_slider.val, c_slider.val,
@@ -508,6 +512,11 @@ fpr_slider.on_changed(sliders_on_changed)
 lambsup1_slider.on_changed(sliders_on_changed)
 lambdelt_slider.on_changed(sliders_on_changed)
 alpha_slider.on_changed(sliders_on_changed)
+
+make_axes_area_auto_adjustable(ax1)
+make_axes_area_auto_adjustable(ax2)
+make_axes_area_auto_adjustable(ax3)
+
 plt.show(block=True)
 
 
