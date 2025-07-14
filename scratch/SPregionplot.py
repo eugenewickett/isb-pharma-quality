@@ -21,7 +21,7 @@ lambsup, lambsup1, lambsup2 = 0.9, 0.9, 0.9
 Ltheta_max = 8
 Ltheta_vec = np.arange(0, Ltheta_max, 0.02)
 
-numpts = 20  # Refinement along each axis for plotting
+numpts = 30  # Refinement along each axis for plotting
 
 def UtilSP(q1, q2, lambret, lambsup1, lambsup2, alph):
     # Social planner's utility
