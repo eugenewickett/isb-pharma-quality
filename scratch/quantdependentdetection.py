@@ -156,6 +156,149 @@ cmapname = 'Greys'
 fig = plt.figure()
 fig.suptitle('Scenario 1: '+r'$\Lambda_1=\Lambda_2,w_1=w_2$', fontsize=18, fontweight='bold')
 ax1 = fig.add_subplot(111)
+fig.subplots_adjust(bottom=0.4)
+im = ax1.imshow(regplotmat, vmin=-1, vmax=4,
+                extent=(lambsupplier.min(), lambsupplier.max(), wprice.min(), wprice.max()),
+                origin="lower", cmap=cmapname)
+colors = [im.cmap(im.norm(value)) for value in values]
+
+#ax1.set_xlim([0, 2])
+#minmaxgap = np.nanmax(retpolicy_mat) - np.nanmin(retpolicy_mat)
+#ax1.set_ylim([np.nanmin(retpolicy_mat) - 0.05*minmaxgap, np.nanmax(retpolicy_mat) + 0.05*minmaxgap])
+ax1.set_title('Retailer strategy vs supplier decisions')
+ax1.set_xlabel(r'$w_1=w_2$', fontsize=12)
+ax1.set_ylabel(r'$\Lambda_1=\Lambda_2$', rotation=0, fontsize=12, labelpad=3)
+
+# Add sliders for changing the parameters
+slstrtval = 0.32
+b_slider_ax = fig.add_axes([0.1, slstrtval, 0.65, 0.02])
+b_slider = Slider(b_slider_ax, 'b', 0.01, 0.99, valinit=b_0)
+c_slider_ax = fig.add_axes([0.1, slstrtval-0.04, 0.65, 0.02])
+c_slider = Slider(c_slider_ax, 'c', 0.01, 0.99, valinit=c_0)
+lambretlo_slider_ax = fig.add_axes([0.1, slstrtval-0.08, 0.65, 0.02])
+lambretlo_slider = Slider(lambretlo_slider_ax, r'$\lambda^{lo}$', 0.01, 0.99, valinit=lambretlo_0)
+lambrethi_slider_ax = fig.add_axes([0.1, slstrtval-0.12, 0.65, 0.02])
+lambrethi_slider = Slider(lambrethi_slider_ax, r'$\lambda^{hi}$', 0.01, 0.99, valinit=lambrethi_0)
+sens_slider_ax = fig.add_axes([0.1, slstrtval-0.16, 0.65, 0.02])
+sens_slider = Slider(sens_slider_ax, r'$\rho$', 0.5, 0.99, valinit=sens_0)
+fpr_slider_ax = fig.add_axes([0.1, slstrtval-0.2, 0.65, 0.02])
+fpr_slider = Slider(fpr_slider_ax, r'$\phi$', 0.01, 0.2, valinit=fpr_0)
+Ltheta_slider_ax = fig.add_axes([0.1, slstrtval-0.24, 0.65, 0.02])
+Ltheta_slider = Slider(Ltheta_slider_ax, r'$L_{\theta}$', 0.01, 4.0, valinit=Ltheta_0)
+
+# create a patch (proxy artist) for every color
+patches = [mpatches.Patch(color=colors[i], edgecolor='black', label=labels[i]) for i in range(len(values))]
+# put those patched as legend-handles into the legend
+ax1.legend(handles=patches, bbox_to_anchor=(-0.6, 1.0), loc='upper left', borderaxespad=0.1, fontsize=14)
+def sliders_on_changed(val):
+    regplotmat = regionplotfuncforretailer_Scen1(numpts, 0.99, 0.99, Ltheta_slider.val, b_slider.val, c_slider.val,
+                                                 lambretlo_slider.val, lambrethi_slider.val, sens_slider.val,
+                                                 fpr_slider.val)
+
+    im.set_data(regplotmat)
+
+    #minmaxgap = np.nanmax(retpolicy_mat) - np.nanmin(retpolicy_mat)
+    #ax1.set_ylim([np.nanmin(retpolicy_mat) - 0.05*minmaxgap, np.nanmax(retpolicy_mat) + 0.05*minmaxgap])
+
+    fig.canvas.draw_idle()
+b_slider.on_changed(sliders_on_changed)
+c_slider.on_changed(sliders_on_changed)
+lambretlo_slider.on_changed(sliders_on_changed)
+lambrethi_slider.on_changed(sliders_on_changed)
+sens_slider.on_changed(sliders_on_changed)
+fpr_slider.on_changed(sliders_on_changed)
+Ltheta_slider.on_changed(sliders_on_changed)
+plt.show(block=True)
+
+########################
+# Now incorporate quantity-dependent detections at inspection
+########################
+def RetPrice(q1, q2, b):
+    return 1 - q1 - b*q2
+def RetProfit(q1, q2, b, w1, w2, c):
+    return (q1*(RetPrice(q1, q2, b) - w1 - c)) + (q2*(RetPrice(q2, q1, b) - w2 - c))
+def RetLowQualProb_quant(lambret, lambsup1, lambsup2, q1, q2, detect_const=0):
+    return 1 - (lambret*(((q1+detect_const/2)/(q1+q2+detect_const))*lambsup1 +\
+                         ((q2+detect_const/2)/(q1+q2+detect_const))*lambsup2))
+
+def RetLowQualProb_actor(lambret, lambsup1, lambsup2, q1, q2, detect_const=0):
+    if q1>0:
+        if q2>0:
+            retval = 1 - lambret*lambsup1*lambsup2
+        else:
+            retval = 1 - lambret*lambsup1
+    else:
+        retval = 1 - lambret*lambsup2
+    return retval
+
+
+def UtilsRet_Scen1_quantdetect(detect_const, lambsup1, lambsup2, Ltheta, b, c, w1, w2, lambretlo, lambrethi,
+                               sens, fpr):
+    util_list = []
+    # What is retailer's utility as a function of different policies?
+    # 0={Y12}, 1={N12}, 2={Y1}, 3={N1}
+    # Maximizing quantities can no longer be derived; need to obtain numerically
+    qvec = np.linspace(0.01, 0.99, 100)
+    # Policy {Y12}
+    currmaxutil, q1max, q2max = -0.0001, 0, 0  # initialize best policy values
+    for curr_q1 in qvec:
+        for curr_q2 in qvec:
+            currutil = RetProfit(curr_q1, curr_q2, b, w1, w2, c) - \
+                Ltheta*(fpr + (sens-fpr)*(RetLowQualProb_quant(lambrethi, lambsup1, lambsup2, curr_q1, curr_q2)))
+            if currutil > currmaxutil:
+                q1max, q2max = curr_q1, curr_q2
+                currmaxutil = currutil
+    util_list.append(currmaxutil)
+    # Policy {N12}
+    currmaxutil, q1max, q2max = -0.0001, 0, 0  # initialize best policy values
+    for curr_q1 in qvec:
+        for curr_q2 in qvec:
+            currutil = RetProfit(curr_q1, curr_q2, b, w1, w2, 0) - \
+                       Ltheta * (fpr + (sens - fpr) * (
+                        RetLowQualProb_quant(lambretlo, lambsup1, lambsup2, curr_q1, curr_q2)))
+            if currutil > currmaxutil:
+                q1max, q2max = curr_q1, curr_q2
+                currmaxutil = currutil
+    util_list.append(currmaxutil)
+    # Policy {Y1}
+    util_list.append(0.5 * (1 - c - w1) * (1 - c - w1 + 0.5 * (-1 + c + w1)) - Ltheta * (
+                fpr + (sens - fpr) * (1 - lambrethi * lambsup1)))
+    # Policy {N1}
+    util_list.append(0.5 * (1 - w1) * (1 - w1 + 0.5 * (-1 + w1)) - Ltheta * (
+            fpr + (sens - fpr) * (1 - lambretlo * lambsup1)))
+    # Policy {N}
+    util_list.append(0)
+    return util_list
+
+
+
+
+def regionplotfuncforretailer_Scen1_quantdetect(numpts, detect_const, lambsup_max, w_max, Ltheta, b, c, lambretlo,
+                                                lambrethi, sens, fpr):
+    # Returns a region plot plotting matrix with wholesale price x-axis and quality-rate y-axis
+    regionplotmat = np.empty((numpts, numpts))
+    for wind, w in enumerate(np.linspace(0.01, w_max, numpts)):
+        for lsind, ls in enumerate(np.linspace(0.01, lambsup_max, numpts)):
+            regionplotmat[lsind, wind] = int(round(np.argmax(UtilsRet_Scen1_quantdetect(detect_const, ls, ls, Ltheta,
+                                                                                        b, c, w, w, lambretlo,
+                                                                                        lambrethi, sens, fpr))))
+    return regionplotmat
+
+numpts = 10
+
+Ltheta_0 = 0.08
+regplotmat = regionplotfuncforretailer_Scen1_quantdetect(numpts, 0, 0.99, 0.99, Ltheta_0, b_0, c_0, lambretlo_0,
+                                                         lambrethi_0, sens_0, fpr_0)
+d = np.linspace(0.01, 0.99, numpts)
+lambsupplier, wprice = np.meshgrid(d, d)
+values = [0, 1, 2, 3, 4]
+labels = ['{Y12}', '{N12}', '{Y1}', '{N1}', '{N}']
+cmapname = 'plasma'
+cmapname = 'Greys'
+
+fig = plt.figure()
+fig.suptitle('Scenario 1: '+r'$\Lambda_1=\Lambda_2,w_1=w_2$', fontsize=18, fontweight='bold')
+ax1 = fig.add_subplot(111)
 fig.subplots_adjust(bottom=0.5)
 im = ax1.imshow(regplotmat, vmin=-1, vmax=4,
                 extent=(lambsupplier.min(), lambsupplier.max(), wprice.min(), wprice.max()),
@@ -191,9 +334,9 @@ patches = [mpatches.Patch(color=colors[i], edgecolor='black', label=labels[i]) f
 # put those patched as legend-handles into the legend
 ax1.legend(handles=patches, bbox_to_anchor=(-0.6, 1.0), loc='upper left', borderaxespad=0.1, fontsize=14)
 def sliders_on_changed(val):
-    regplotmat = regionplotfuncforretailer_Scen1(numpts, 0.99, 0.99, Ltheta_slider.val, b_slider.val, c_slider.val,
-                                                 lambretlo_slider.val, lambrethi_slider.val, sens_slider.val,
-                                                 fpr_slider.val)
+    regplotmat = regionplotfuncforretailer_Scen1_quantdetect(numpts, 0, 0.99, 0.99, Ltheta_slider.val, b_slider.val,
+                                                             c_slider.val, lambretlo_slider.val, lambrethi_slider.val,
+                                                             sens_slider.val, fpr_slider.val)
 
     im.set_data(regplotmat)
 
@@ -209,79 +352,6 @@ sens_slider.on_changed(sliders_on_changed)
 fpr_slider.on_changed(sliders_on_changed)
 Ltheta_slider.on_changed(sliders_on_changed)
 plt.show(block=True)
-
-########################
-# Now incorporate quantity-dependent detections at inspection
-########################
-def RetPrice(q1, q2, b):
-    return 1 - q1 - b*q2
-def RetProfit(q1, q2, b, w1, w2, c):
-    return (q1*RetPrice(q1, q2, b) - w1 - c) + (q2*RetPrice(q2, q1, b) - w2 - c)
-def RetLowQualProb(lambret, lambsup1, lambsup2, q1, q2, detect_const=0):
-    return 1 - (lambret*(((q1+detect_const/2)/(q1+q2+detect_const))*lambsup1 +\
-                         ((q2+detect_const/2)/(q1+q2+detect_const))*lambsup2))
-
-def UtilsRet_Scen1_quantdetect(detect_const, lambsup1, lambsup2, Ltheta, b, c, w1, w2, lambretlo, lambrethi,
-                               sens, fpr):
-    util_list = []
-    # What is retailer's utility as a function of different policies?
-    # 0={Y12}, 1={N12}, 2={Y1}, 3={N1}
-    # Maximizing quantities can no longer be derived; need to obtain numerically
-    qvec = np.linspace(0.001, 0.99, 1000)
-    # Policy {Y12}
-    currmaxutil, q1max, q2max = 0, 0, 0  # initialize best policy values
-    for curr_q1 in qvec:
-        for curr_q2 in qvec:
-            currutil = RetProfit(curr_q1, curr_q2, b, w1, w2, c) - \
-                Ltheta*(fpr + (sens-fpr)*(1 - RetLowQualProb(lambrethi, lambsup1, lambsup2, curr_q1, curr_q2)))
-            if currutil > currmaxutil:
-                q1max, q2max = curr_q1, curr_q2
-                currmaxutil = currutil
-    util_list.append(currmaxutil)
-    # Policy {N12}
-    currmaxutil, q1max, q2max = 0, 0, 0  # initialize best policy values
-    for curr_q1 in qvec:
-        for curr_q2 in qvec:
-            currutil = RetProfit(curr_q1, curr_q2, b, w1, w2, 0) - \
-                       Ltheta * (fpr + (sens - fpr) * (
-                        1 - RetLowQualProb(lambretlo, lambsup1, lambsup2, curr_q1, curr_q2)))
-            if currutil > currmaxutil:
-                q1max, q2max = curr_q1, curr_q2
-                currmaxutil = currutil
-    print(q1max)
-    print(q2max)
-    util_list.append(currmaxutil)
-    # Policy {Y1}
-    util_list.append(0.5 * (1 - c - w1) * (1 - c - w1 + 0.5 * (-1 + c + w1)) - Ltheta * (
-                fpr + (sens - fpr) * (1 - lambrethi * lambsup1)))
-    # Policy {N1}
-    util_list.append(0.5 * (1 - w1) * (1 - w1 + 0.5 * (-1 + w1)) - Ltheta * (
-            fpr + (sens - fpr) * (1 - lambretlo * lambsup1)))
-    # Policy {N}
-    util_list.append(0)
-    return util_list
-
-
-
-q1test = (1 - b_0 - 0 + b_0 * 0 - w_0 + b_0 * w_0) / (2 * (1 - (b_0 ** 2)))
-q2test = (1 - b_0 - 0 + b_0 * 0 - w_0 + b_0 * w_0) / (2 * (1 - (b_0 ** 2)))
-UtilsRet_Scen1_quantdetect(0, 1.0, 1.0, Ltheta_0, b_0, c_0, w_0, w_0, lambretlo_0, lambrethi_0,
-                               sens_0, fpr_0)
-RetProfit(q1test, q2test, b_0, w_0, w_0, 0) - \
-                       Ltheta_0 * (fpr_0 + (sens_0 - fpr_0) * (
-                        1 - RetLowQualProb(lambretlo_0, 1.0, 1.0, q1test, q2test)))
-def regionplotfuncforretailer_Scen1_quantdetect(numpts, detect_const, lambsup_max, w_max, Ltheta, b, c, lambretlo,
-                                                lambrethi, sens, fpr):
-    # Returns a region plot plotting matrix with wholesale price x-axis and quality-rate y-axis
-    regionplotmat = np.empty((numpts, numpts))
-    for wind, w in enumerate(np.linspace(0.01, w_max, numpts)):
-        for lsind, ls in enumerate(np.linspace(0.01, lambsup_max, numpts)):
-            regionplotmat[lsind, wind] = int(round(np.argmax(UtilsRet_Scen1_quantdetect(detect_const, ls, ls, Ltheta,
-                                                                                        b, c, w, w, lambretlo,
-                                                                                        lambrethi, sens, fpr))))
-    return regionplotmat
-
-
 
 
 
