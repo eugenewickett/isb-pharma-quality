@@ -411,7 +411,7 @@ def regionplotfuncforretailer_Scen1_quantdetect_numsup(numpts, detect_const, lam
                                                                                         lambrethi, sens, fpr))))
     return regionplotmat
 
-numpts = 8
+numpts = 12
 
 Ltheta_0 = 0.08
 regplotmat = regionplotfuncforretailer_Scen1_quantdetect_numsup(numpts, 0, 0.99, 0.99, Ltheta_0, b_0, c_0, lambretlo_0,
@@ -661,4 +661,191 @@ lambdelt_slider.on_changed(sliders_on_changed)
 Ltheta_slider.on_changed(sliders_on_changed)
 
 plt.show(block=True)
+
+
+###############
+# DIFFERENT DETECTION MECHANISM
+###############
+w12_delt_0 = 0.05
+lamb12_delt_0 = 0.05
+
+def UtilsRet_Scen5_quantdetect(detect_const, lambsup1, lambsup2, Ltheta, b, c, w1, w2, lambretlo, lambrethi,
+                               sens, fpr):
+    util_list = []
+    quants_list = []  # Return the order quantities so we don't have to recalculate
+    # What is retailer's utility as a function of different policies?
+    # 0={Y12}, 1={N12}, 2={Y1}, 3={N1}, 4={Y2}, 5={N2}, 6={N}
+    # Maximizing quantities can no longer be derived for {12} strategies; need to obtain numerically
+    qvec = np.linspace(0.01, 0.99, 100)
+    # Policy {Y12}
+    currmaxutil, q1max, q2max = -0.0001, 0, 0  # initialize best policy values
+    for curr_q1 in qvec:
+        for curr_q2 in qvec:
+            currutil = RetProfit(curr_q1, curr_q2, b, w1, w2, c) - \
+                Ltheta*(fpr + (sens-fpr)*(RetLowQualProb_quant(lambrethi, lambsup1, lambsup2, curr_q1, curr_q2)))
+            if currutil > currmaxutil:
+                q1max, q2max = curr_q1, curr_q2
+                currmaxutil = currutil
+    util_list.append(currmaxutil)
+    quants_list.append((q1max, q2max))
+    # Policy {N12}
+    currmaxutil, q1max, q2max = -0.0001, 0, 0  # initialize best policy values
+    for curr_q1 in qvec:
+        for curr_q2 in qvec:
+            currutil = RetProfit(curr_q1, curr_q2, b, w1, w2, 0) - \
+                       Ltheta * (fpr + (sens - fpr) * (
+                        RetLowQualProb_quant(lambretlo, lambsup1, lambsup2, curr_q1, curr_q2)))
+            if currutil > currmaxutil:
+                q1max, q2max = curr_q1, curr_q2
+                currmaxutil = currutil
+    util_list.append(currmaxutil)
+    quants_list.append((q1max, q2max))
+    # Policy {Y1}
+    q1max = 0.5 * (1 - c - w1)
+    util_list.append(q1max * (1 - c - w1 - q1max) - Ltheta * (fpr + (sens - fpr) * (1 - lambrethi * lambsup1)))
+    quants_list.append((q1max, 0))
+    # Policy {N1}
+    q1max = 0.5 * (1 - w1)
+    util_list.append(q1max * (1 - w1 - q1max) - Ltheta * (fpr + (sens - fpr) * (1 - lambretlo * lambsup1)))
+    quants_list.append((q1max, 0))
+    # Policy {Y2}
+    q2max = 0.5 * (1 - c - w2)
+    util_list.append(q2max * (1 - c - w2 - q2max) - Ltheta * (fpr + (sens - fpr) * (1 - lambrethi * lambsup2)))
+    quants_list.append((0, q2max))
+    # Policy {N2}
+    q2max = 0.5 * (1 - w2)
+    util_list.append(q2max * (1 - w2 - q2max) - Ltheta * (fpr + (sens - fpr) * (1 - lambretlo * lambsup2)))
+    quants_list.append((0, q2max))
+    # Policy {N}
+    util_list.append(0)
+    quants_list.append((0, 0))
+    return util_list, quants_list
+
+lambsup1, lambsup2 = 0.9-lamb12_delt_0, 0.9
+Ltheta = 0.12
+pol_list, q_list = UtilsRet_Scen5_quantdetect(0, lambsup1, lambsup2, Ltheta, b_0, c_0, w_0-w12_delt_0, w_0,
+                                                     lambretlo_0, lambrethi_0, sens_0, fpr_0)
+
+def RetQuantInvestPlots_WRT_w(numpts, detect_const, lambsup1, lambsup2, Ltheta, b, c, lambretlo, lambrethi, sens, fpr):
+    """
+    Return 3 matrices denoting the retailer quantities and quality investments for different w1, w2.
+    Assumed w2>w1.
+    """
+    q1mat, q2mat, investmat = np.empty((numpts, numpts)), np.empty((numpts, numpts)), np.empty((numpts, numpts))
+    for currw1ind, currw1 in enumerate(np.linspace(0.01, 0.99, numpts)):
+        for currw2ind, currw2 in enumerate(np.linspace(0.01, 0.99, numpts)):
+            if currw2 >= currw1:  # Only calculate for lower diagonal values
+                curr_ulist, curr_qlist = UtilsRet_Scen5_quantdetect(detect_const, lambsup1, lambsup2, Ltheta, b,
+                                                                c, currw1, currw2, lambretlo, lambrethi, sens, fpr)
+                currpolind = np.argmax(curr_ulist)
+                currqtup = curr_qlist[currpolind]
+                q1mat[currw2ind, currw1ind] = currqtup[0]
+                q2mat[currw2ind, currw1ind] = currqtup[1]
+                if currpolind in [0, 2, 4]:
+                    investmat[currw2ind, currw1ind] = 1
+                else:
+                    investmat[currw2ind, currw1ind] = 0
+            else:
+                q1mat[currw2ind, currw1ind], q2mat[currw2ind, currw1ind] = np.nan, np.nan
+                investmat[currw2ind, currw1ind] = np.nan
+    return q1mat, q2mat, investmat
+
+numpts = 20  # MODIFY AS NEEDED
+q1mat, q2mat, investmat = RetQuantInvestPlots_WRT_w(numpts, 0, lambsup2-lamb12_delt_0, lambsup2, Ltheta_0, b_0, c_0,
+                                                    lambretlo_0, lambrethi_0, sens_0, fpr_0)
+
+d1 = np.linspace(0.01, 0.99, numpts)
+grid = np.meshgrid(d1, d1)
+
+
+#values = [0, 1, 2, 3, 4, 5, 6]
+#labels = ['{Y12}', '{N12}', '{Y1}', '{N1}', '{Y2}', '{N2}', '{N}']
+cmapname = 'Greys'
+
+fig = plt.figure(figsize=(20, 10))
+fig.suptitle('Scenario 5: '+r'$\Delta\Lambda=\Lambda_2-\Lambda_1,\Delta w=w_2-w_1$', fontsize=18, fontweight='bold')
+ax1 = plt.subplot2grid((1, 3), (0, 0))
+ax2 = plt.subplot2grid((1, 3), (0, 1))
+ax3 = plt.subplot2grid((1, 3), (0, 2))
+
+fig.subplots_adjust(bottom=0.3)
+
+im1 = ax1.imshow(q1mat.T, vmin=0, vmax=0.5,
+                extent=(0, 1, 0, 1),
+                origin="lower", cmap=cmapname, interpolation='none')
+
+im2 = ax2.imshow(q2mat.T, vmin=0, vmax=0.5,
+                extent=(0, 1, 0, 1),
+                origin="lower", cmap=cmapname, interpolation='none')
+
+im3 = ax3.imshow(investmat.T, vmin=0, vmax=1,
+                extent=(0, 1, 0, 1),
+                origin="lower", cmap=cmapname, interpolation='none')
+
+ax1.set_title(r'$q_{1}$')
+ax1.set_xlabel(r'$w_2$', fontsize=12)
+ax1.set_ylabel(r'$w_1$', rotation=0, fontsize=12, labelpad=15)
+
+ax2.set_title(r'$q_{2}$')
+ax2.set_xlabel(r'$w_2$', fontsize=12)
+ax2.set_ylabel(r'$w_1$', rotation=0, fontsize=12, labelpad=15)
+
+ax3.set_title('Retailer quality investment')
+ax3.set_xlabel(r'$w_2$', fontsize=12)
+ax3.set_ylabel(r'$w_1$', rotation=0, fontsize=12, labelpad=15)
+
+# Add sliders for changing the parameters
+slstrtval = 0.28
+slht = 0.01
+slvertgap = 0.02
+b_slider_ax = fig.add_axes([0.1, slstrtval, 0.65, slht])
+b_slider = Slider(b_slider_ax, 'b', 0.01, 0.99, valinit=b_0)
+c_slider_ax = fig.add_axes([0.1, slstrtval-slvertgap, 0.65, slht])
+c_slider = Slider(c_slider_ax, 'c', 0.01, 0.99, valinit=c_0)
+lambretlo_slider_ax = fig.add_axes([0.1, slstrtval-slvertgap*2, 0.65, slht])
+lambretlo_slider = Slider(lambretlo_slider_ax, r'$\lambda^{lo}$', 0.01, 0.99, valinit=lambretlo_0)
+lambrethi_slider_ax = fig.add_axes([0.1, slstrtval-slvertgap*3, 0.65, slht])
+lambrethi_slider = Slider(lambrethi_slider_ax, r'$\lambda^{hi}$', 0.01, 0.99, valinit=lambrethi_0)
+sens_slider_ax = fig.add_axes([0.1, slstrtval-slvertgap*4, 0.65, slht])
+sens_slider = Slider(sens_slider_ax, r'$\rho$', 0.5, 0.99, valinit=sens_0)
+fpr_slider_ax = fig.add_axes([0.1, slstrtval-slvertgap*5, 0.65, slht])
+fpr_slider = Slider(fpr_slider_ax, r'$\phi$', 0.01, 0.2, valinit=fpr_0)
+lambsup2_slider_ax = fig.add_axes([0.1, slstrtval-slvertgap*6, 0.65, slht])
+lambsup2_slider = Slider(lambsup2_slider_ax, r'$\Lambda_2$', 0.01, 0.99, valinit=lambsup1)
+lambdelt_slider_ax = fig.add_axes([0.1, slstrtval-slvertgap*7, 0.65, slht])
+lambdelt_slider = Slider(lambdelt_slider_ax, r'$\Delta\Lambda$', 0.01, 0.5, valinit=lamb12_delt_0)
+Ltheta_slider_ax = fig.add_axes([0.1, slstrtval-slvertgap*8, 0.65, slht])
+Ltheta_slider = Slider(Ltheta_slider_ax, r'$L_\theta$', 0.01, 0.5, valinit=Ltheta_0)
+
+# create a patch (proxy artist) for every color
+#patches = [mpatches.Patch(color=colors[i], label=labels[i]) for i in range(len(values))]
+# put those patched as legend-handles into the legend
+#fig.legend(handles=patches, loc='upper left', borderaxespad=0.05, fontsize=12)
+def sliders_on_changed(val):
+    q1mat, q2mat, investmat = RetQuantInvestPlots_WRT_w(numpts, 0, lambsup2_slider.val-lambdelt_slider.val,
+                                                        lambsup2_slider.val, Ltheta_slider.val, b_slider.val,
+                                                        c_slider.val, lambretlo_slider.val, lambrethi_slider.val,
+                                                        sens_slider.val, fpr_slider.val)
+    im1.set_data(q1mat.T)
+    im2.set_data(q2mat.T)
+    im3.set_data(investmat.T)
+
+    fig.canvas.draw_idle()
+
+b_slider.on_changed(sliders_on_changed)
+c_slider.on_changed(sliders_on_changed)
+lambretlo_slider.on_changed(sliders_on_changed)
+lambrethi_slider.on_changed(sliders_on_changed)
+sens_slider.on_changed(sliders_on_changed)
+fpr_slider.on_changed(sliders_on_changed)
+lambsup2_slider.on_changed(sliders_on_changed)
+lambdelt_slider.on_changed(sliders_on_changed)
+Ltheta_slider.on_changed(sliders_on_changed)
+
+plt.show(block=True)
+
+####################
+# Plot quantities and investment decisions from *all* detection paradigms
+####################
+
 
