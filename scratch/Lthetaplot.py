@@ -469,48 +469,51 @@ def GetSPUtilMatFromQuantQualMats(al, retQual_plot, supQual_plot, eqQuant_plot, 
 def steadyStateMat(P):
     # Returns steady-state vector for transition matrix P
     # If singulartiy issues, break into smaller matrices
-    try:
-        A = np.transpose(P) - np.eye(P.shape[0])
-        A[-1] = np.ones(P.shape[0])  # Constraint: sum(pi) = 1
-        b = np.zeros(P.shape[0])
-        b[-1] = 1
-        retVec = np.linalg.solve(A, b)
-    except:
-        print('Singular transition matrix identified')
-        # Break into 2 sub matrices: those connected to 0 and those that are not
-        mainlist = [i for i in range(P.shape[0])]
-        list1 = [0]
-        poplist = [0]
-        while len(poplist) > 0:
-            popind = poplist.pop()  # grab next index
-            # get all rows and columns tied to this index not already in list1
-            colinds = np.where(P[:, popind] == 1)[0].tolist()
-            rowinds = np.where(P[popind, :] == 1)[0].tolist()
-            for ind in colinds:
-                if ind not in list1:
-                    list1.append(ind)
-                    poplist.append(ind)
-            for ind in rowinds:
-                if ind not in list1:
-                    list1.append(ind)
-                    poplist.append(ind)
-        list1.sort()
-        list2 = [mainlist[i] for i in range(len(mainlist)) if (i not in list1 and P[i].sum()>0)]
-        ixgrid1 = np.ix_(list1, list1)
-        ixgrid2 = np.ix_(list2, list2)
-        P1 = P[ixgrid1]
-        P2 = P[ixgrid2]
-        P1vec = steadyStateMat(P1)
-        P2vec = steadyStateMat(P2)
-        # Zip together these 2 vectors according to the indices of list1 and list2
-        retVec = np.zeros(len(mainlist))
-        for ind in range(len(mainlist)):
-            if ind in list1:
-                listind = list1.index(ind)
-                retVec[ind] = P1vec[listind]
-            elif ind in list2:
-                listind = list2.index(ind)
-                retVec[ind] = P2vec[listind]
+    if P.sum()==0:
+        retVec = np.zeros(P.shape[0])
+    else:
+        try:
+            A = np.transpose(P) - np.eye(P.shape[0])
+            A[-1] = np.ones(P.shape[0])  # Constraint: sum(pi) = 1
+            b = np.zeros(P.shape[0])
+            b[-1] = 1
+            retVec = np.linalg.solve(A, b)
+        except:
+            print('Singular transition matrix identified')
+            # Break into 2 sub matrices: those connected to 0 and those that are not
+            mainlist = [i for i in range(P.shape[0])]
+            list1 = [0]
+            poplist = [0]
+            while len(poplist) > 0:
+                popind = poplist.pop()  # grab next index
+                # get all rows and columns tied to this index not already in list1
+                colinds = np.where(P[:, popind] == 1)[0].tolist()
+                rowinds = np.where(P[popind, :] == 1)[0].tolist()
+                for ind in colinds:
+                    if ind not in list1:
+                        list1.append(ind)
+                        poplist.append(ind)
+                for ind in rowinds:
+                    if ind not in list1:
+                        list1.append(ind)
+                        poplist.append(ind)
+            list1.sort()
+            list2 = [mainlist[i] for i in range(len(mainlist)) if (i not in list1 and P[i].sum()>0)]
+            ixgrid1 = np.ix_(list1, list1)
+            ixgrid2 = np.ix_(list2, list2)
+            P1 = P[ixgrid1]
+            P2 = P[ixgrid2]
+            P1vec = steadyStateMat(P1)
+            P2vec = steadyStateMat(P2)
+            # Zip together these 2 vectors according to the indices of list1 and list2
+            retVec = np.zeros(len(mainlist))
+            for ind in range(len(mainlist)):
+                if ind in list1:
+                    listind = list1.index(ind)
+                    retVec[ind] = P1vec[listind]
+                elif ind in list2:
+                    listind = list2.index(ind)
+                    retVec[ind] = P2vec[listind]
 
     return retVec
 
@@ -524,7 +527,7 @@ lambretlo_0, lambrethi_0 = 0.8, 0.9
 sens_0, fpr_0 = 0.8, 0.01
 lambsuplo_0, lambsuphi_0 = 0.75, 0.95
 lambsup, lambsup1, lambsup2 = 0.9, 0.9, 0.9
-Ltheta_max = 0.3
+
 
 # HIGH LR, LOW LS REGION
 # Lr_insp_min, Lr_insp_max = 0.24, 0.3
@@ -546,9 +549,10 @@ eq_list = ['HHY12', 'HHN12', 'LLY12', 'LLN12', 'LHY12', 'LHN12', 'HHY1', 'HHN1',
 
 numLpts = 40  # Refinement along each axis for plotting
 numWpts = 30  # Refinement for deviation prices
+Ltheta_max = 0.3
 Ltheta_vec = np.arange(0, Ltheta_max + Ltheta_max / numLpts, Ltheta_max / numLpts)
 
-eqStrat_matList, eqQuant_matList, Tmat = LthetaEqMatsForPlot(numLpts, Ltheta_max, numWpts, lambsuplo_0, lambsuphi_0,
+eqStrat_matList, eqQuant_matList, _ = LthetaEqMatsForPlot(numLpts, Ltheta_max, numWpts, lambsuplo_0, lambsuphi_0,
                                                              b_0, c_0, cSup_0, lambretlo_0, lambrethi_0, sens_0, fpr_0,
                                                              printUpdates=False, Lr_insp_min=Lr_insp_min,
                                                              Lr_insp_max=Lr_insp_max, Ls_insp_min=Ls_insp_min,
@@ -562,19 +566,21 @@ eqMix_matList = [eqNoprofit]
 for Lr_ind, Lr in enumerate(Ltheta_vec):
     for Ls_ind, Ls in enumerate(Ltheta_vec):
         if np.nansum([eqStrat_matList[i][Lr_ind, Ls_ind] for i in range(len(eqStrat_matList))]) == 0:
-            print('Lr:' + str(Lr_ind))
-            print('Ls:' + str(Ls_ind))
+            # print('Lr:' + str(Lr_ind))
+            # print('Ls:' + str(Ls_ind))
             # Need to identify equilibria mixture
             _, _, currTmat = LthetaEqMatsForPlot(numLpts, Ltheta_max, numWpts, lambsuplo_0, lambsuphi_0, b_0, c_0,
                                                  cSup_0, lambretlo_0, lambrethi_0, sens_0, fpr_0, printUpdates=False,
                                                  Lr_insp_min=Lr_insp_min, Lr_insp_max=Lr_insp_max,
                                                  Ls_insp_min=Ls_insp_min, Ls_insp_max=Ls_insp_max, Lr_ind_Tmat=Lr_ind,
                                                  Ls_ind_Tmat=Ls_ind)
-            currTvec = steadyStateMat(currTmat[:-1, :-1])  # Don't consider {N} for now as it's always a steady state
-            if currTvec.sum() == 0:  # Only {N} possible
+            currTvec = steadyStateMat(currTmat)  # Don't consider {N} for now as it's always a steady state
+            if currTvec[:-1].sum() == 0:  # Only {N} possible
+                print('{N} value found')
                 eqMix_matList[0][Lr_ind, Ls_ind] = 1
             else:  # Mixture
-                currTnames = [eq_list[i] for i in range(len(eq_list)) if currTvec[i] > 0]
+                tempVec = currTvec[:-1]
+                currTnames = [eq_list[i] for i in range(len(eq_list)) if tempVec[i] > 0]
                 if currTnames not in eqMixName_List:  # Add a new mixture
                     eqMixName_List.append(currTnames)
                     newMat = np.empty((numLpts+1, numLpts+1))
