@@ -3,7 +3,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib.widgets import Slider
-import matplotlib.patheffects as pe
+import textwrap
 
 matplotlib.use('qt5agg')  # pycharm backend doesn't support interactive plots, so we use qt here
 
@@ -98,14 +98,16 @@ def SupSymPrices(b, c, cSup):
 
 def SupAsymPrices(b, c, cSup):
     # Returns wholesale prices under asymmetric supplier quality levels, assuming S1 is low-quality
-    w1 = max(((-1+b) * (2+b-c*(2+b))-b*cSup ) / (-4+b**2), 0)
-    w2 = max(((-1+b) * (2+b-c*(2+b))-2*cSup ) / (-4+b**2), 0)
+    w1 = max(((b-1) * (b+2) * (c-1) + (b*cSup)) / (4-b**2), 0)
+    w2 = max(((b-1) * (b+2) * (c-1) + (2*cSup)) / (4-b**2), 0)
     return w1, w2
 
+SupAsymPrices(0.5, 0.05, 0.1)
 def SupExclPrices(b, c, cSup):
     # Returns wholesale prices under single-supplier sourcing
+    # Default is very high price for non-sourced supplier
     w = max((1 - c + cSup) / 2, 0)
-    return w, w
+    return w, 2
 
 def WholesalePricesFromEq(eqind, b, c, cSup):
     # Returns wholesale prices under given equilibrium
@@ -156,7 +158,7 @@ def GetTransInd(eq, retPref = -1, sup1Pref = -1, sup2Pref = -1):
                'LHY1', 'LHN1', 'N']
     ret_strat_list = ['Y12', 'N12', 'Y1', 'N1', 'Y2', 'N2', 'N']
     eqInd = eq_list.index(eq)
-    if retPref >= 0:  # Retailer deviates
+    if retPref >= 0 and sup1Pref < 0 and sup2Pref < 0:  # Retailer deviates
         if sup1Pref >= 0 or sup2Pref >= 0:
             print('ERROR: More than 1 deviating player')
             return
@@ -175,33 +177,220 @@ def GetTransInd(eq, retPref = -1, sup1Pref = -1, sup2Pref = -1):
         elif eq_trans == 'HLN12':
             eq_trans = 'LHN12'
     elif sup1Pref >= 0:  # Supplier 1 deviates
+        # What is the retailer doing?
+        if retPref < 0:  # Stays the same
+            retpol = eq[2:]
+        else:  # Changes
+            retpol = ret_strat_list[retPref]
+
         if sup2Pref >= 0:
             print('ERROR: More than 1 deviating player')
             return
         if eq[0] == 'H':
-            eq_trans = 'L' + eq[1:]
+            eq_trans = 'L' + eq[1] + retpol
         elif eq[0] == 'L':
-            eq_trans = 'H' + eq[1:]
+            eq_trans = 'H' + eq[1] + retpol
         # Account for equivalent states
         if eq_trans == 'HLY12':
             eq_trans = 'LHY12'
         elif eq_trans == 'HLN12':
             eq_trans = 'LHN12'
+        # Account for Y2/N2 policies
+        if retPref in [4, 5]:
+            eq_trans = eq_trans[1] + eq_trans[0] + ret_strat_list[retPref - 2]
     elif sup2Pref >= 0:  # Supplier 2 deviates
+        # What is the retailer doing?
+        if retPref < 0:  # Stays the same
+            retpol = eq[2:]
+        else:  # Changes
+            retpol = ret_strat_list[retPref]
+
         if eq[1] == 'H':
-            eq_trans = eq[0] + 'L' + eq[2:]
+            eq_trans = eq[0] + 'L' + retpol
         elif eq[1] == 'L':
-            eq_trans = eq[0] + 'H' + eq[2:]
+            eq_trans = eq[0] + 'H' + retpol
         # Account for equivalent states
         if eq_trans == 'HLY12':
             eq_trans = 'LHY12'
         elif eq_trans == 'HLN12':
             eq_trans = 'LHN12'
+        # Account for Y2/N2 policies
+        if retPref in [4, 5]:
+            eq_trans = eq_trans[1]+eq_trans[0] + ret_strat_list[retPref-2]
     return eq_list.index(eq_trans)
+
+def GetQuantMatFromEqMats(eqStrat_matList, eqQuant_matList):
+    eqQuant_matList_plot = []
+    numLpts = eqStrat_matList[0].shape[0]
+    for i in range(len(eqStrat_matList)):
+        temp = eqStrat_matList[i].copy()
+        temp.flatten()
+        eqStrat_matList_dup = np.repeat(temp, 2)
+        temp2 = eqStrat_matList_dup.reshape((numLpts, numLpts, 2))
+        qMat = temp2 * eqQuant_matList[i]
+        eqQuant_matList_plot.append(qMat)
+    eqQuant_plot = np.sum(np.nanmean(np.array(eqQuant_matList_plot), axis=0), axis=2)
+    return eqQuant_plot
+
+def GetQualMatsFromEqMat(eqStrat_matList, eqStrat_vec):
+    # Produces matrix of retailer and supplier quality investments using equilibria
+    # Presence of HL or multiple equilibria produces value of 0.5
+    eqStratArr = np.array(eqStrat_matList)
+    retQual_plot = np.empty(eqStratArr.shape[1:])
+    supQual_plot = np.empty(eqStratArr.shape[1:])
+    for lr in range(eqStratArr.shape[1]):
+        for ls in range(eqStratArr.shape[2]):
+            # Check indices of equilibria
+            currVec = eqStratArr[:, lr, ls]
+            currEqInds = np.where(currVec==1)[0].tolist()
+            currEq = [eqStrat_vec[x] for x in currEqInds]
+            # Retailer quality levels
+            if len(currEq) == 0:
+                retQual_plot[lr, ls] = np.nan
+            elif set(currEq).issubset(['{HHY12}', '{LLY12}',  '{LHY12}',  '{HHY1}',  '{LLY1}', '{HLY1}', '{LHY1}']):  # All Y
+                retQual_plot[lr, ls] = 1
+            elif set(currEq).issubset(['{HHN12}', '{LLN12}',  '{LHN12}',  '{HHN1}',  '{LLN1}', '{HLN1}', '{LHN1}']):  # All N
+                retQual_plot[lr, ls] = 0
+            else:  # Mixture
+                retQual_plot[lr, ls] = 0.5
+            # Supplier quality levels
+            if len(currEq) == 0:
+                supQual_plot[lr, ls] = np.nan
+            elif set(currEq).issubset(['{LLY12}', '{LLN12}', '{LLY1}', '{LLN1}']):  # All LL
+                supQual_plot[lr, ls] = 0
+            elif set(currEq).issubset(['{HHY12}', '{HHN12}', '{HHY1}', '{HHN1}']):  # All HH
+                supQual_plot[lr, ls] = 1
+            else:  # Mixture
+                supQual_plot[lr, ls] = 0.5
+
+    return retQual_plot, supQual_plot
+
+def GetQualMatsFromMixedEqMat(eqStrat_matList, eqStrat_vec, eqMix_matList, eqMixName_List):
+    eqStratArr = np.array(eqStrat_matList)
+    retQual_plot = np.empty(eqStratArr.shape[1:])
+    supQual_plot = np.empty(eqStratArr.shape[1:])
+
+    eqMixArr = np.array(eqMix_matList)
+
+    for lr in range(eqStratArr.shape[1]):
+        for ls in range(eqStratArr.shape[2]):
+            # Check indices of equilibria
+            currVec = eqStratArr[:, lr, ls]
+            currEqInds = np.where(currVec==1)[0].tolist()
+            currEq = [eqStrat_vec[x] for x in currEqInds]
+            # Retailer quality levels
+            if len(currEq) == 0:  # Either mixed or {N}
+                # retQual_plot[lr, ls] = np.nan
+                currMixVec = eqMixArr[:, lr, ls]
+                currMixInds = np.where(currMixVec==1)[0].tolist()
+                if currMixInds == [0]:  # {N}
+                    retQual_plot[lr, ls] = 0
+                    supQual_plot[lr, ls] = 0
+                else:
+                    mixList = [j for i in currMixInds for j in eqMixName_List[i]]
+                    if set(mixList).issubset(['HHY12', 'LLY12',  'LHY12',  'HHY1',  'LLY1', 'HLY1', 'LHY1']):  # All Y
+                        retQual_plot[lr, ls] = 1
+                    elif set(mixList).issubset(['HHN12', 'LLN12',  'LHN12',  'HHN1',  'LLN1', 'HLN1', 'LHN1']):  # All N
+                        retQual_plot[lr, ls] = 0
+                    else:
+                        retQual_plot[lr, ls] = 0.5
+                    # Suppliers
+                    if set(mixList).issubset(['LLY12', 'LLN12', 'LLY1', 'LLN1']):  # All LL
+                        supQual_plot[lr, ls] = 0
+                    elif set(mixList).issubset(['HHY12', 'HHN12', 'HHY1', 'HHN1']):  # All HH
+                        supQual_plot[lr, ls] = 1
+                    else:
+                        supQual_plot[lr, ls] = 0.5
+
+            elif set(currEq).issubset(['{HHY12}', '{LLY12}',  '{LHY12}',  '{HHY1}',  '{LLY1}', '{HLY1}', '{LHY1}']):  # All Y
+                retQual_plot[lr, ls] = 1
+            elif set(currEq).issubset(['{HHN12}', '{LLN12}',  '{LHN12}',  '{HHN1}',  '{LLN1}', '{HLN1}', '{LHN1}']):  # All N
+                retQual_plot[lr, ls] = 0
+            else:  # Mixture
+                retQual_plot[lr, ls] = 0.5
+            # Supplier quality levels
+            if len(currEq) == 0:
+                # supQual_plot[lr, ls] = np.nan
+                pass
+            elif set(currEq).issubset(['{LLY12}', '{LLN12}', '{LLY1}', '{LLN1}']):  # All LL
+                supQual_plot[lr, ls] = 0
+            elif set(currEq).issubset(['{HHY12}', '{HHN12}', '{HHY1}', '{HHN1}']):  # All HH
+                supQual_plot[lr, ls] = 1
+            else:  # Mixture
+                supQual_plot[lr, ls] = 0.5
+
+    return retQual_plot, supQual_plot
+
+def GetSPUtilMatFromQuantQualMats(al, retQual_plot, supQual_plot, eqQuant_plot, lambretlo, lambrethi, lambsuplo,
+                                  lambsuphi):
+    SPUtil_plot = np.empty(retQual_plot.shape)
+    for lr in range(SPUtil_plot.shape[0]):
+        for ls in range(SPUtil_plot.shape[1]):
+            if not np.isnan(retQual_plot[lr, ls]):
+                currRetQual = ((1-retQual_plot[lr, ls]) * lambretlo) + ((retQual_plot[lr, ls]) * lambrethi)
+                currSupQual = ((1 - supQual_plot[lr, ls]) * lambsuplo) + ((supQual_plot[lr, ls]) * lambsuphi)
+                SPUtil_plot[lr, ls] = SPUtil(eqQuant_plot[lr, ls], 0, currRetQual, currSupQual, 0, al)
+            else:
+                SPUtil_plot[lr, ls] = np.nan
+    return SPUtil_plot
+
+def steadyStateMat(P, printUpdate = False):
+    # Returns steady-state vector for transition matrix P
+    # If singulartiy issues, break into smaller matrices
+    if P.sum() == 0:
+        retVec = np.zeros(P.shape[0])
+    elif np.diag(P)[:-1].sum() > 0:  # We have some equilibria
+        retVec = np.diag(P)
+    else:
+        try:
+            A = np.transpose(P) - np.eye(P.shape[0])
+            A[-1] = np.ones(P.shape[0])  # Constraint: sum(pi) = 1
+            b = np.zeros(P.shape[0])
+            b[-1] = 1
+            retVec = np.linalg.solve(A, b)
+        except:
+            if printUpdate is True:
+                print('Singular transition matrix identified')
+            # Break into 2 sub matrices: those connected to 0 and those that are not
+            mainlist = [i for i in range(P.shape[0])]
+            list1 = [0]
+            poplist = [0]
+            while len(poplist) > 0:
+                popind = poplist.pop()  # grab next index
+                # get all rows and columns tied to this index not already in list1
+                colinds = np.where(P[:, popind] == 1)[0].tolist()
+                rowinds = np.where(P[popind, :] == 1)[0].tolist()
+                for ind in colinds:
+                    if ind not in list1 and ind not in poplist:
+                        list1.append(ind)
+                        poplist.append(ind)
+                for ind in rowinds:
+                    if ind not in list1 and ind not in poplist:
+                        list1.append(ind)
+                        poplist.append(ind)
+            list1.sort()
+            list2 = [mainlist[i] for i in range(len(mainlist)) if (i not in list1 and P[i].sum()>0)]
+            ixgrid1 = np.ix_(list1, list1)
+            ixgrid2 = np.ix_(list2, list2)
+            P1 = P[ixgrid1]
+            P2 = P[ixgrid2]
+            P1vec = steadyStateMat(P1)
+            P2vec = steadyStateMat(P2)
+            # Zip together these 2 vectors according to the indices of list1 and list2
+            retVec = np.zeros(len(mainlist))
+            for ind in range(len(mainlist)):
+                if ind in list1:
+                    listind = list1.index(ind)
+                    retVec[ind] = P1vec[listind]
+                elif ind in list2:
+                    listind = list2.index(ind)
+                    retVec[ind] = P2vec[listind]
+
+    return retVec
 
 def LthetaEqMatsForPlot(numLpts, Ltheta_max, numWpts, lambsuplo, lambsuphi, b, c, cSup, lambretlo, lambrethi, sens, fpr,
                         printUpdates = False, Lr_insp_min = 0.0, Lr_insp_max = 0.0, Ls_insp_min = 0.0,
-                        Ls_insp_max = 0.0, Lr_ind_Tmat = -1, Ls_ind_Tmat = -1):
+                        Ls_insp_max = 0.0, Lr_ind_Tmat = -1, Ls_ind_Tmat = -1, eps = 0.001):
     # Generate list of equilibria matrices for plotting, including quality levels and order quantities
     # Loop through possible equilibria and generate matrices demarcating where they are Nash equilibria
     # 0:{HHY12}, 1:{HHN12}, 2:{LLY12}, 3:{LLN12}, 4:{LHY12}, 5:{LHN12}, 6:{HHY1}, 7:{HHN1}, 8:{LLY1}, 9:{LLN1},
@@ -212,7 +401,7 @@ def LthetaEqMatsForPlot(numLpts, Ltheta_max, numWpts, lambsuplo, lambsuphi, b, c
                'LHY1', 'LHN1']
     eqStrat_matList = []
     eqQuant_matList = []
-    Ltheta_vec = np.arange(0, Ltheta_max + Ltheta_max / numLpts, Ltheta_max / numLpts)
+    Ltheta_vec = np.arange(0, Ltheta_max + 0.00001, Ltheta_max / numLpts)
 
     Lr_insp_vec = Ltheta_vec[Ltheta_vec > Lr_insp_min]
     Lr_insp_vec = Lr_insp_vec[Lr_insp_vec < Lr_insp_max]
@@ -270,19 +459,13 @@ def LthetaEqMatsForPlot(numLpts, Ltheta_max, numWpts, lambsuplo, lambsuphi, b, c
         eqQuant_mat = np.zeros((numLpts + 1, numLpts + 1, 2))  # S1, then S2
         if printUpdates is True:
             print('Current eq point: ' + eq_curr)
-            print('q1, q2: '+str(q1_eq)+', '+str(q2_eq))
-            print('w1, w2: ' + str(w1_eq) + ', ' + str(w2_eq))
+            print('q1, q2: '+str(round(q1_eq, 3))+', '+str(round(q2_eq, 3)))
+            print('w1, w2: ' + str(round(w1_eq, 3)) + ', ' + str(round(w2_eq, 3)))
         for Lrind, Lr in enumerate(Ltheta_vec):
-            if printUpdates is True:
-                print('Lr: ' + str(round(Lr, 3)))
             for Lsind, Ls in enumerate(Ltheta_vec):
-                if printUpdates is True:
+                if Lr in Lr_insp_vec and Ls in Ls_insp_vec and printUpdates is True:
+                    print('Lr: ' + str(round(Lr, 3)))
                     print('Ls: ' + str(round(Ls, 3)))
-                # if Lr in Lr_insp_vec and Ls in Ls_insp_vec:
-                #     printUpdates = True
-                #     print('Current eq point: ' + eq_curr)
-                #     print('Lr: ' + str(round(Lr, 3)))
-                #     print('Ls: ' + str(round(Ls, 3)))
                 # Proceed if no transition matrix L indices specified or if we are at our focus point
                 if (Lr_ind_Tmat < 0 and Ls_ind_Tmat < 0) or (Lrind == Lr_ind_Tmat and Lsind == Ls_ind_Tmat):
                     if Lrind == Lr_ind_Tmat and Lsind == Ls_ind_Tmat:
@@ -291,23 +474,8 @@ def LthetaEqMatsForPlot(numLpts, Ltheta_max, numWpts, lambsuplo, lambsuphi, b, c
                         storeTmat = False
                     # Initialize matrix storage value to 1, and update to 0 if any equilibrium conditions violated
                     matVal = 1
-                    # CHECK 1: Retailer prefers the equilibrium strategy
-                    utilRetVec_eq = UtilsRet_Scen5(lambsup1_eq, lambsup2_eq, Lr, b, c, w1_eq, w2_eq, lambretlo,
-                                                   lambrethi, sens, fpr)
-                    if np.argmax(utilRetVec_eq) != retStrat_eq:
-                        matVal = np.nan
-                        if printUpdates is True:
-                            print('The retailer prefers strategy ' + str(np.argmax(utilRetVec_eq)) + retStratToStr(
-                                np.argmax(utilRetVec_eq)))
-                        if storeTmat is True:
-                            # Store transition from current equilibrium
-                            Tmat[eqind, GetTransInd(eq_curr, retPref=np.argmax(utilRetVec_eq))] = 1
-                    # If {HHY1} is eq_curr and retailer still prefers to leave, then all players must exit
-                    # if eq_curr == 'HHY1' and np.argmax(utilRetVec_eq) == 6:
-                    #     print('No non-negative utility for all players possible')
-                    #     noeq_mat[Lrind, Lsind] = 1
 
-                    # CHECK 2: Suppliers have non-negative utility
+                    # CHECK 1: Suppliers have non-negative utility
                     if eq_curr in ['HHY12', 'HHN12', 'HHY1', 'HHN1']:
                         s1util_eq = SupUtil(q1_eq, w1_eq, cSup, Ls, lambret_eq, lambsup1_eq, sens, fpr)
                         s2util_eq = SupUtil(q2_eq, w2_eq, cSup, Ls, lambret_eq, lambsup2_eq, sens, fpr)
@@ -330,13 +498,14 @@ def LthetaEqMatsForPlot(numLpts, Ltheta_max, numWpts, lambsuplo, lambsuphi, b, c
                         if storeTmat is True:
                             # Store transition from current equilibrium
                             Tmat[eqind, len(eq_list)] = 1
-                    # CHECK 3: Suppliers want to deviate
+
+                    # CHECK 2: Suppliers want to deviate
                     if lambsup1_eq == lambsuphi:
                         lambsup1_dev = lambsuplo
                     elif lambsup1_eq == lambsuplo:
                         lambsup1_dev = lambsuphi
                     # Iterate through possible deviation prices for S1
-                    if matVal == 1 or (matVal == np.nan and printUpdates is True):
+                    if matVal == 1:
                         breakloop = False
                         for w1_dev in w_vec:
                             if w1_dev != w1_eq and breakloop is False:  # Deviation price cannot be the equilibrium price
@@ -355,17 +524,19 @@ def LthetaEqMatsForPlot(numLpts, Ltheta_max, numWpts, lambsuplo, lambsuphi, b, c
                                     utilSup1_dev = SupUtil(q1_dev, w1_dev, cSup, Ls, lambret_dev, lambsup1_dev, sens, fpr)
                                 elif lambsup1_dev == lambsuplo:
                                     utilSup1_dev = SupUtil(q1_dev, w1_dev, 0, Ls, lambret_dev, lambsup1_dev, sens, fpr)
-                                if utilSup1_dev > s1util_eq:
+                                if utilSup1_dev > s1util_eq + eps:
                                     if printUpdates is True:
-                                        print('S1 does better with w1=' + str(round(w1_dev, 3)))
+                                        print('S1 does better with w1=' + str(round(w1_dev, 3)) + ', '
+                                              + str(round(utilSup1_dev, 3)) + ' over ' + str(round(s1util_eq, 3)))
+                                        print('where retailer opts for ' + str(retStrat_dev))
                                     matVal = np.nan
-                                    if storeTmat is True:
+                                    if storeTmat is True and Tmat[eqind, :].sum() == 0:
                                         # Store transition from current equilibrium
-                                        Tmat[eqind, GetTransInd(eq_curr, sup1Pref=1)] = 1
+                                        Tmat[eqind, GetTransInd(eq_curr, sup1Pref=1, retPref=retStrat_dev)] = 1
                                     breakloop = True
                     # Check S2 if asymmetric or single-sourcing
                     if (eq_curr in ['LHY12', 'LHN12', 'HHY1', 'HHN1', 'LLY1', 'LLN1', 'HLY1', 'HLN1', 'LHY1', 'LHN1']
-                        and matVal == 1) or (matVal == np.nan and printUpdates is True):
+                        and matVal == 1):
                         if lambsup2_eq == lambsuphi:
                             lambsup2_dev = lambsuplo
                         elif lambsup2_eq == lambsuplo:
@@ -387,14 +558,33 @@ def LthetaEqMatsForPlot(numLpts, Ltheta_max, numWpts, lambsuplo, lambsuphi, b, c
                                     utilSup2_dev = SupUtil(q2_dev, w2_dev, cSup, Ls, lambret_dev, lambsup2_dev, sens, fpr)
                                 elif lambsup2_dev == lambsuplo:
                                     utilSup2_dev = SupUtil(q2_dev, w2_dev, 0, Ls, lambret_dev, lambsup2_dev, sens, fpr)
-                                if utilSup2_dev > s2util_eq:
+                                if utilSup2_dev > s2util_eq + eps:
                                     if printUpdates is True:
-                                        print('S2 does better with w2=' + str(round(w2_dev, 3)))
+                                        print('S2 does better with w2=' + str(round(w2_dev, 3))+ ', '
+                                              + str(round(utilSup2_dev, 3)) + ' over ' + str(round(s2util_eq, 3)))
                                     matVal = np.nan
-                                    if storeTmat is True:
+                                    if storeTmat is True and Tmat[eqind, :].sum() == 0:
                                         # Store transition from current equilibrium
-                                        Tmat[eqind, GetTransInd(eq_curr, sup2Pref=1)] = 1
+                                        Tmat[eqind, GetTransInd(eq_curr, sup2Pref=1, retPref=retStrat_dev)] = 1
                                     breakloop = True
+
+                    # CHECK 3: Retailer prefers the equilibrium strategy
+                    utilRetVec_eq = UtilsRet_Scen5(lambsup1_eq, lambsup2_eq, Lr, b, c, w1_eq, w2_eq, lambretlo,
+                                                   lambrethi, sens, fpr)
+                    if np.argmax(utilRetVec_eq) != retStrat_eq and matVal == 1:
+                        matVal = np.nan
+                        if printUpdates is True:
+                            print('The retailer prefers strategy ' + str(np.argmax(utilRetVec_eq)) + retStratToStr(
+                                np.argmax(utilRetVec_eq)) + ', ' + str(utilRetVec_eq[np.argmax(utilRetVec_eq)]) +
+                                  ' util instead of ' + str(utilRetVec_eq[retStrat_eq]))
+                        if storeTmat is True and Tmat[eqind, :].sum() == 0:
+                            # Store transition from current equilibrium
+                            Tmat[eqind, GetTransInd(eq_curr, retPref=np.argmax(utilRetVec_eq))] = 1
+                    # If {HHY1} is eq_curr and retailer still prefers to leave, then all players must exit
+                    # if eq_curr == 'HHY1' and np.argmax(utilRetVec_eq) == 6:
+                    #     print('No non-negative utility for all players possible')
+                    #     noeq_mat[Lrind, Lsind] = 1
+
                     eq_mat[Lrind, Lsind] = matVal
                     if matVal == 1:  # Store quantities
                         eqQuant_mat[Lrind, Lsind, :] = np.array([q1_eq, q2_eq])
@@ -409,121 +599,13 @@ def LthetaEqMatsForPlot(numLpts, Ltheta_max, numWpts, lambsuplo, lambsuphi, b, c
     Tmat[-1, -1] = 1
     return eqStrat_matList, eqQuant_matList, Tmat
 
-def GetQuantMatFromEqMats(eqStrat_matList, eqQuant_matList):
-    eqQuant_matList_plot = []
-    numLpts = eqStrat_matList[0].shape[0]
-    for i in range(len(eqStrat_matList)):
-        temp = eqStrat_matList[i].copy()
-        temp.flatten()
-        eqStrat_matList_dup = np.repeat(temp, 2)
-        temp2 = eqStrat_matList_dup.reshape((numLpts, numLpts, 2))
-        qMat = temp2 * eqQuant_matList[i]
-        eqQuant_matList_plot.append(qMat)
-    eqQuant_plot = np.sum(np.nanmean(np.array(eqQuant_matList_plot), axis=0), axis=2)
-    return eqQuant_plot
-
-def GetQualMatsFromEqMat(eqStrat_matList, eqStrat_vec):
-    eqStratArr = np.array(eqStrat_matList)
-    retQual_plot = np.empty(eqStratArr.shape[1:])
-    supQual_plot = np.empty(eqStratArr.shape[1:])
-    for lr in range(eqStratArr.shape[1]):
-        for ls in range(eqStratArr.shape[2]):
-            # Check indices of equilibria
-            currVec = eqStratArr[:, lr, ls]
-            currEqInds = np.where(currVec==1)[0].tolist()
-            currEq = [eqStrat_vec[x] for x in currEqInds]
-            # Retailer quality levels
-            if len(currEq) == 0:
-                retQual_plot[lr, ls] = np.nan
-            elif set(currEq).issubset(['{HHY12}', '{LLY12}',  '{LHY12}',  '{HHY1}',  '{LLY1}', '{HLY1}', '{LHY1}']):  # All Y
-                retQual_plot[lr, ls] = 1
-            elif set(currEq).issubset(['{HHN12}', '{LLN12}',  '{LHN12}',  '{HHN1}',  '{LLN1}', '{HLN1}', '{LHN1}']):  # All N
-                retQual_plot[lr, ls] = 0
-            else:  # Mixture
-                retQual_plot[lr, ls] = 0.5
-            # Supplier quality levels
-            if len(currEq) == 0:
-                supQual_plot[lr, ls] = np.nan
-            elif set(currEq).issubset(['{LLY12}', '{LLN12}', '{LLY1}', '{LLN1}']):  # All LL
-                supQual_plot[lr, ls] = 0
-            elif set(currEq).issubset(['{HHY12}', '{HHN12}', '{HHY1}', '{HHN1}']):  # All HH
-                supQual_plot[lr, ls] = 1
-            else:  # Mixture
-                supQual_plot[lr, ls] = 0.5
-
-    return retQual_plot, supQual_plot
-
-def GetSPUtilMatFromQuantQualMats(al, retQual_plot, supQual_plot, eqQuant_plot, lambretlo, lambrethi, lambsuplo,
-                                  lambsuphi):
-    SPUtil_plot = np.empty(retQual_plot.shape)
-    for lr in range(SPUtil_plot.shape[0]):
-        for ls in range(SPUtil_plot.shape[1]):
-            if not np.isnan(retQual_plot[lr, ls]):
-                currRetQual = ((1-retQual_plot[lr, ls]) * lambretlo) + ((retQual_plot[lr, ls]) * lambrethi)
-                currSupQual = ((1 - supQual_plot[lr, ls]) * lambsuplo) + ((supQual_plot[lr, ls]) * lambsuphi)
-                SPUtil_plot[lr, ls] = SPUtil(eqQuant_plot[lr, ls], 0, currRetQual, currSupQual, 0, al)
-            else:
-                SPUtil_plot[lr, ls] = np.nan
-    return SPUtil_plot
-
-def steadyStateMat(P):
-    # Returns steady-state vector for transition matrix P
-    # If singulartiy issues, break into smaller matrices
-    if P.sum()==0:
-        retVec = np.zeros(P.shape[0])
-    else:
-        try:
-            A = np.transpose(P) - np.eye(P.shape[0])
-            A[-1] = np.ones(P.shape[0])  # Constraint: sum(pi) = 1
-            b = np.zeros(P.shape[0])
-            b[-1] = 1
-            retVec = np.linalg.solve(A, b)
-        except:
-            print('Singular transition matrix identified')
-            # Break into 2 sub matrices: those connected to 0 and those that are not
-            mainlist = [i for i in range(P.shape[0])]
-            list1 = [0]
-            poplist = [0]
-            while len(poplist) > 0:
-                popind = poplist.pop()  # grab next index
-                # get all rows and columns tied to this index not already in list1
-                colinds = np.where(P[:, popind] == 1)[0].tolist()
-                rowinds = np.where(P[popind, :] == 1)[0].tolist()
-                for ind in colinds:
-                    if ind not in list1:
-                        list1.append(ind)
-                        poplist.append(ind)
-                for ind in rowinds:
-                    if ind not in list1:
-                        list1.append(ind)
-                        poplist.append(ind)
-            list1.sort()
-            list2 = [mainlist[i] for i in range(len(mainlist)) if (i not in list1 and P[i].sum()>0)]
-            ixgrid1 = np.ix_(list1, list1)
-            ixgrid2 = np.ix_(list2, list2)
-            P1 = P[ixgrid1]
-            P2 = P[ixgrid2]
-            P1vec = steadyStateMat(P1)
-            P2vec = steadyStateMat(P2)
-            # Zip together these 2 vectors according to the indices of list1 and list2
-            retVec = np.zeros(len(mainlist))
-            for ind in range(len(mainlist)):
-                if ind in list1:
-                    listind = list1.index(ind)
-                    retVec[ind] = P1vec[listind]
-                elif ind in list2:
-                    listind = list2.index(ind)
-                    retVec[ind] = P2vec[listind]
-
-    return retVec
-
 # Define policy function when all parameters are fixed
 alph_0 = 0.8
 b_0 = 0.5
-c_0 = 0.02
+c_0 = 0.08
 cSup_0 = 0.12
 w_0 = 0.075
-lambretlo_0, lambrethi_0 = 0.8, 0.9
+lambretlo_0, lambrethi_0 = 0.8, 0.95
 sens_0, fpr_0 = 0.8, 0.01
 lambsuplo_0, lambsuphi_0 = 0.75, 0.95
 lambsup, lambsup1, lambsup2 = 0.9, 0.9, 0.9
@@ -547,16 +629,24 @@ Lr_ind_Tmat, Ls_ind_Tmat = 19, 20
 eq_list = ['HHY12', 'HHN12', 'LLY12', 'LLN12', 'LHY12', 'LHN12', 'HHY1', 'HHN1', 'LLY1', 'LLN1', 'HLY1', 'HLN1', 'LHY1',
            'LHN1']
 
-numLpts = 40  # Refinement along each axis for plotting
+numLpts = 20  # Refinement along each axis for plotting
 numWpts = 30  # Refinement for deviation prices
-Ltheta_max = 0.3
-Ltheta_vec = np.arange(0, Ltheta_max + Ltheta_max / numLpts, Ltheta_max / numLpts)
+Ltheta_max = 0.7
+Ltheta_vec = np.arange(0, Ltheta_max + 0.00001, Ltheta_max / numLpts)
+eps = 0.001  # tolerance for switching strategies
 
 eqStrat_matList, eqQuant_matList, _ = LthetaEqMatsForPlot(numLpts, Ltheta_max, numWpts, lambsuplo_0, lambsuphi_0,
                                                              b_0, c_0, cSup_0, lambretlo_0, lambrethi_0, sens_0, fpr_0,
                                                              printUpdates=False, Lr_insp_min=Lr_insp_min,
                                                              Lr_insp_max=Lr_insp_max, Ls_insp_min=Ls_insp_min,
                                                              Ls_insp_max=Ls_insp_max)
+
+eqStrat_matList, eqQuant_matList, Tmat = LthetaEqMatsForPlot(numLpts, Ltheta_max, numWpts, lambsuplo_0, lambsuphi_0,
+                                                             b_0, c_0, cSup_0, lambretlo_0, lambrethi_0, sens_0, fpr_0,
+                                                             printUpdates=True, Lr_insp_min=Lr_insp_min,
+                                                             Lr_insp_max=Lr_insp_max, Ls_insp_min=Ls_insp_min,
+                                                             Ls_insp_max=Ls_insp_max, Lr_ind_Tmat=0, Ls_ind_Tmat=9)
+
 # Fill in gaps with no equilibria
 # Initialize with 'no profit' equilibrium
 eqMixName_List = [['N']]
@@ -574,13 +664,14 @@ for Lr_ind, Lr in enumerate(Ltheta_vec):
                                                  Lr_insp_min=Lr_insp_min, Lr_insp_max=Lr_insp_max,
                                                  Ls_insp_min=Ls_insp_min, Ls_insp_max=Ls_insp_max, Lr_ind_Tmat=Lr_ind,
                                                  Ls_ind_Tmat=Ls_ind)
-            currTvec = steadyStateMat(currTmat)  # Don't consider {N} for now as it's always a steady state
+            currTvec = steadyStateMat(currTmat)
             if currTvec[:-1].sum() == 0:  # Only {N} possible
-                print('{N} value found')
+                # print('{N} value found')
                 eqMix_matList[0][Lr_ind, Ls_ind] = 1
             else:  # Mixture
                 tempVec = currTvec[:-1]
                 currTnames = [eq_list[i] for i in range(len(eq_list)) if tempVec[i] > 0]
+                currTnames.sort()
                 if currTnames not in eqMixName_List:  # Add a new mixture
                     eqMixName_List.append(currTnames)
                     newMat = np.empty((numLpts+1, numLpts+1))
@@ -591,10 +682,7 @@ for Lr_ind, Lr in enumerate(Ltheta_vec):
                     mixInd = eqMixName_List.index(currTnames)
                     eqMix_matList[mixInd][Lr_ind, Ls_ind] = 1
 
-
-
-
-
+# Now do plotting
 d = np.linspace(0, Ltheta_max, numLpts+1)
 
 alval = 0.7  # Transparency for plots
@@ -603,6 +691,22 @@ labels = ['{HHY12}', '{HHN12}', '{LLY12}', '{LLN12}', '{LHY12}', '{LHN12}', '{HH
           '{HLY1}', '{HLN1}', '{LHY1}', '{LHN1}']
 eqcolors = ['royalblue', 'deepskyblue', 'red', 'pink', 'darkorange', 'bisque', 'darkgreen', 'greenyellow',
             'gold', 'lemonchiffon', 'purple', 'plum', 'silver', 'lightgray']
+mixcolors = ['lime', 'magenta', 'yellow', 'orangered', 'cyan'] * 10
+# Add in {N} and mixed equilibria
+for mixeqlistind, mixeqlist in enumerate(eqMixName_List):
+    if mixeqlist == ['N']:
+        labels.append('{N}')
+        eqcolors.append('black')
+    else:  # Mixed list
+        tempstr = ''
+        for mixitem in mixeqlist:
+            tempstr = tempstr + '{' + mixitem + '}, '
+        tempstr = tempstr[:-2]  # Drop last comma and space
+        labels.append(tempstr)
+        eqcolors.append(mixcolors[mixeqlistind-1])
+# Add to equilibria strategy list
+eqStrat_matList = eqStrat_matList + eqMix_matList
+
 
 
 
@@ -620,7 +724,12 @@ fig.subplots_adjust(right=figrt)
 imlist = []
 for eqind in range(len(labels)):
     mycmap = matplotlib.colors.ListedColormap(['white', eqcolors[eqind]], name='from_list', N=None)
-    im = axStrat.imshow(eqStrat_matList[eqind].T, vmin=0, vmax=1,
+    if eqcolors[eqind] == 'black':  # No alpha transparency
+        im = axStrat.imshow(eqStrat_matList[eqind].T, vmin=0, vmax=1,
+                            extent=(Ltheta_vec.min(), Ltheta_vec.max(), Ltheta_vec.min(), Ltheta_vec.max()),
+                            origin="lower", cmap=mycmap, alpha=1)
+    else:
+        im = axStrat.imshow(eqStrat_matList[eqind].T, vmin=0, vmax=1,
                     extent=(Ltheta_vec.min(), Ltheta_vec.max(), Ltheta_vec.min(), Ltheta_vec.max()),
                     origin="lower", cmap=mycmap, alpha=alval)
     imlist.append(im)
@@ -629,13 +738,15 @@ for eqind in range(len(labels)):
 axStrat.set_xlabel(r'$L^{R}_{\theta}$', fontsize=12)
 axStrat.set_ylabel(r'$L^{S}_{\theta}$', rotation=0, fontsize=12, labelpad=3)
 axStrat.set_title('Equilibria strategies')
-# create a patch (proxy artist) for every color
-patches = [mpatches.Patch(color=eqcolors[i], edgecolor='black', label=labels[i]) for i in range(len(eqcolors))]
+# create a patch for every color
+legwidth = 20
+wraplabels = ['\n'.join(textwrap.wrap(labels[i], width=legwidth)) for i in range(len(labels))]
+patches = [mpatches.Patch(color=eqcolors[i], edgecolor='black', label=wraplabels[i]) for i in range(len(eqcolors))]
 # put those patched as legend-handles into the legend
 axStrat.legend(handles=patches, bbox_to_anchor=(-0.3, 1.0), loc='upper right', borderaxespad=0.1, fontsize=8)
 
 # Quantities
-eqQuant_plot = GetQuantMatFromEqMats(eqStrat_matList, eqQuant_matList)
+eqQuant_plot = GetQuantMatFromEqMats(eqStrat_matList[:-len(eqMix_matList)], eqQuant_matList)
 imQuant = axQuant.imshow(eqQuant_plot.T, vmin=0, vmax=1,
                     extent=(Ltheta_vec.min(), Ltheta_vec.max(), Ltheta_vec.min(), Ltheta_vec.max()),
                     origin="lower", cmap='Blues')
@@ -644,7 +755,9 @@ axQuant.set_ylabel(r'$L^{S}_{\theta}$', rotation=0, fontsize=12, labelpad=3)
 axQuant.set_title('Equilibria quantities')
 
 # Quality levels
-retQual_plot, supQual_plot = GetQualMatsFromEqMat(eqStrat_matList, labels)
+# retQual_plot, supQual_plot = GetQualMatsFromEqMat(eqStrat_matList[:-len(eqMix_matList)], labels[:-len(eqMix_matList)])
+retQual_plot, supQual_plot = GetQualMatsFromMixedEqMat(eqStrat_matList[:-len(eqMix_matList)],
+                                                       labels[:-len(eqMix_matList)], eqMix_matList, eqMixName_List)
 imSupQual = axSupQual.imshow(supQual_plot.T, vmin=-0.5, vmax=1.5,
                     extent=(Ltheta_vec.min(), Ltheta_vec.max(), Ltheta_vec.min(), Ltheta_vec.max()),
                     origin="lower", cmap='Grays')
