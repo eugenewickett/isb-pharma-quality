@@ -13,38 +13,48 @@ def SPUtil(q1, q2, lambret, lambsup1, lambsup2, alph):
     # Social planner's utility
     return q1*(alph+(lambret*lambsup1)-1) + q2*(alph+(lambret*lambsup2)-1)
 # Function returning retailer utilities under each of 7 possible policies
-def UtilsRet_Scen5(lambsup1, lambsup2, Ltheta, b, c, w1, w2, lambretlo, lambrethi, sens, fpr):
+def UtilsRet_Scen5(lambsup1, lambsup2, Ltheta, b, c, w1, w2, lambretlo, lambrethi, sens, fpr, sourceBothSups=True,
+                   onlyDoubleSource=False, onlyQualInvest=False, const=-0.9):
+    # sourceBothSups indicates if both suppliers are eligible to be sourced; if False then only S1 can be sourced
+    # onlyDoubleSource restricts retailer to choosing 0, 1, or 2 suppliers while making the quality investment
     util_list = []
     # What is retailer's utility as a function of different policies?
     # Returns a list of utilities for each policy under the given inputs
     # 0={Y12}, 1={N12}, 2={Y1}, 3={N1}, 4={Y2}, 5={N2}, 6={N}
     # Policy {Y12}
+
     q1 = max((1 - b - c + b*c - w1 + b*w2) / (2 * (1-(b**2))), 0)
     q2 = max((1 - b - c + b*c - w2 + b*w1) / (2 * (1-(b**2))), 0)
     util_list.append((1 - b - c + b*c - w1 + b*w2)*(1 - c - w1 - b*q2 - q1) / (2 * (1-b**2)) + \
                      (1 - b - c + b*c + b*w1 - w2)*(1 - c - w2 - b*q1 - q2) / (2 * (1-b**2)) - \
-                     Ltheta * (fpr + (sens - fpr) * (1 - lambrethi * lambsup1 * lambsup2)))
+                     Ltheta * (fpr + (sens - fpr) * (1 - lambrethi * lambsup1 * lambsup2)) )
 
     # Policy {N12}
     q1 = max((1 - b - w1 + b * w2) / (2 * (1 - (b ** 2))), 0)
     q2 = max((1 - b - w2 + b * w1) / (2 * (1 - (b ** 2))), 0)
     util_list.append((1 - b - w1 + b*w2) * (1 - w1 - b*q2 - q1) / (2 * (1 - b ** 2)) + \
                      (1 - b + b*w1 - w2) * (1 - w2 - b*q1 - q2) / (2 * (1 - b ** 2)) - \
-                     Ltheta * (fpr + (sens - fpr) * (1 - lambretlo * lambsup1 * lambsup2)))
+                     Ltheta * (fpr + (sens - fpr) * (1 - lambretlo * lambsup1 * lambsup2)) )
     # Policy {Y1}
     util_list.append(0.5 * (1 - c - w1) * (1 - c - w1 + 0.5 * (-1 + c + w1)) - Ltheta * (
-                fpr + (sens - fpr) * (1 - lambrethi * lambsup1)))
+                fpr + (sens - fpr) * (1 - lambrethi * lambsup1)) )
     # Policy {N1}
     util_list.append(0.5 * (1 - w1) * (1 - w1 + 0.5 * (-1 + w1)) - Ltheta * (
-            fpr + (sens - fpr) * (1 - lambretlo * lambsup1)))
+            fpr + (sens - fpr) * (1 - lambretlo * lambsup1)) )
     # Policy {Y2}
     util_list.append(0.5 * (1 - c - w2) * (1 - c - w2 + 0.5 * (-1 + c + w2)) - Ltheta * (
-            fpr + (sens - fpr) * (1 - lambrethi * lambsup2)))
+            fpr + (sens - fpr) * (1 - lambrethi * lambsup2)) )
     # Policy {N2}
     util_list.append(0.5 * (1 - w2) * (1 - w2 + 0.5 * (-1 + w2)) - Ltheta * (
-            fpr + (sens - fpr) * (1 - lambretlo * lambsup2)))
+            fpr + (sens - fpr) * (1 - lambretlo * lambsup2)) )
     # Policy {N}
     util_list.append(0)
+    if sourceBothSups is False:  # S2 is not possibly sourced; set negative so that {N} is preferred
+        util_list[0], util_list[1], util_list[4], util_list[5] = -1, -1, -1, -1
+    if onlyDoubleSource is True:  # Either both suppliers are sourced, or none
+        util_list[2], util_list[3], util_list[4], util_list[5] = -1, -1, -1, -1
+    if onlyQualInvest is True:  # Only 'Y' strategies considered
+        util_list[1], util_list[3], util_list[5] = -1, -1, -1
     return util_list
 
 def RetOrderQuantsFromStrat(stratind, b, c, w1, w2):
@@ -102,14 +112,45 @@ def SupAsymPrices(b, c, cSup):
     w2 = max(((b-1) * (b+2) * (c-1) + (2*cSup)) / (4-b**2), 0)
     return w1, w2
 
-SupAsymPrices(0.5, 0.05, 0.1)
-def SupExclPrices(b, c, cSup):
-    # Returns wholesale prices under single-supplier sourcing
-    # Default is very high price for non-sourced supplier
-    w = max((1 - c + cSup) / 2, 0)
-    return w, 2
+def SupExclPrices(b, c, cSup, s1QualInvest, lambsuphi, lambsuplo, lambrethi, lambretlo, LthetaR, LthetaS, sens, fpr,
+                  numWpts=50, printUpdate=False):
+    # Returns wholesale limit price under single-supplier sourcing
+    # Needs to be sufficiently low such that the non-sourced supplier does not have an incentive to enter the market
+    wVec = np.arange(1 / numWpts, 1, 1 / numWpts)
+    if s1QualInvest is True:  # S1 makes quality investment
+        lambsup1 = lambsuplo
+    else:
+        lambsup1 = lambsuphi
+    bestw1 = 0.0
+    if printUpdate is True:
+        print('Seeking limit price...')
+    for w1 in wVec:
+        validLimit = True
+        for w2 in wVec:
+            for lambsup2 in [lambsuphi, lambsuplo]:
+                currRetUtilVec = UtilsRet_Scen5(lambsup1, lambsup2, LthetaR, b, c, w1, w2, lambretlo, lambrethi, sens,
+                                                fpr)
+                retBestStrat = np.argmax(currRetUtilVec)
+                _, q2 = RetOrderQuantsFromStrat(currRetUtilVec[retBestStrat], b, c, w1, w2)
+                if lambsup2 == lambsuphi:
+                    cSup2 = cSup
+                else:
+                    cSup2 = 0
+                if retBestStrat in [0, 2, 4]:
+                    lambret = lambrethi
+                else:
+                    lambret = lambretlo
+                if SupUtil(q2, w2, cSup2, LthetaS, lambret, lambsup2, sens, fpr) > 0:
+                    validLimit = False
+        if validLimit is True:
+            bestw1 = w1
+            if printUpdate is True:
+                print('Higher limit price found: ' + str(w1))
 
-def WholesalePricesFromEq(eqind, b, c, cSup):
+    return bestw1, bestw1
+
+def WholesalePricesFromEq(eqind, b, c, cSup, lambsuplo, lambsuphi, lambretlo, lambrethi, LthetaR, LthetaS, sens, fpr,
+                          printUpdate=False, numWpts=50):
     # Returns wholesale prices under given equilibrium
     eq = int(eqind)
     if eq == 0:  # {HHY12}
@@ -125,21 +166,29 @@ def WholesalePricesFromEq(eqind, b, c, cSup):
     elif eq == 5:  # {LHN12}
         w1, w2 = SupAsymPrices(b, 0, cSup)
     elif eq == 6:  # {HHY1}
-        w1, w2 = SupExclPrices(b, c, cSup)
+        w1, w2 = SupExclPrices(b, c, cSup, True, lambsuphi, lambsuplo, lambrethi, lambretlo, LthetaR, LthetaS, sens,
+                               fpr, printUpdate=printUpdate, numWpts=numWpts)
     elif eq == 7:  # {HHN1}
-        w1, w2 = SupExclPrices(b, 0, cSup)
+        w1, w2 = SupExclPrices(b, c, cSup, True, lambsuphi, lambsuplo, lambrethi, lambretlo, LthetaR, LthetaS, sens,
+                               fpr, printUpdate=printUpdate, numWpts=numWpts)
     elif eq == 8:  # {LLY1}
-        w1, w2 = SupExclPrices(b, c, 0)
+        w1, w2 = SupExclPrices(b, c, cSup, False, lambsuphi, lambsuplo, lambrethi, lambretlo, LthetaR, LthetaS, sens,
+                               fpr, printUpdate=printUpdate, numWpts=numWpts)
     elif eq == 9:  # {LLN1}
-        w1, w2 = SupExclPrices(b, 0, 0)
+        w1, w2 = SupExclPrices(b, c, cSup, False, lambsuphi, lambsuplo, lambrethi, lambretlo, LthetaR, LthetaS, sens,
+                               fpr, printUpdate=printUpdate, numWpts=numWpts)
     elif eq == 10:  # {HLY1}
-        w1, w2 = SupExclPrices(b, c, cSup)
+        w1, w2 = SupExclPrices(b, c, cSup, True, lambsuphi, lambsuplo, lambrethi, lambretlo, LthetaR, LthetaS, sens,
+                               fpr, printUpdate=printUpdate, numWpts=numWpts)
     elif eq == 11:  # {HLN1}
-        w1, w2 = SupExclPrices(b, 0, cSup)
+        w1, w2 = SupExclPrices(b, c, cSup, True, lambsuphi, lambsuplo, lambrethi, lambretlo, LthetaR, LthetaS, sens,
+                               fpr, printUpdate=printUpdate, numWpts=numWpts)
     elif eq == 12:  # {LHY1}
-        w1, w2 = SupExclPrices(b, c, 0)
+        w1, w2 = SupExclPrices(b, c, cSup, False, lambsuphi, lambsuplo, lambrethi, lambretlo, LthetaR, LthetaS, sens,
+                               fpr, printUpdate=printUpdate, numWpts=numWpts)
     elif eq == 13:  # {LHN1}
-        w1, w2 = SupExclPrices(b, 0, 0)
+        w1, w2 = SupExclPrices(b, c, cSup, False, lambsuphi, lambsuplo, lambrethi, lambretlo, LthetaR, LthetaS, sens,
+                               fpr, printUpdate=printUpdate, numWpts=numWpts)
     else:
         print('Invalid equilibrium')
     return w1, w2
@@ -390,7 +439,8 @@ def steadyStateMat(P, printUpdate = False):
 
 def LthetaEqMatsForPlot(numLpts, Ltheta_max, numWpts, lambsuplo, lambsuphi, b, c, cSup, lambretlo, lambrethi, sens, fpr,
                         printUpdates = False, Lr_insp_min = 0.0, Lr_insp_max = 0.0, Ls_insp_min = 0.0,
-                        Ls_insp_max = 0.0, Lr_ind_Tmat = -1, Ls_ind_Tmat = -1, eps = 0.001):
+                        Ls_insp_max = 0.0, Lr_ind_Tmat = -1, Ls_ind_Tmat = -1, onlyDoubleSource=False,
+                        onlyQualInvest=False, eps=0.001):
     # Generate list of equilibria matrices for plotting, including quality levels and order quantities
     # Loop through possible equilibria and generate matrices demarcating where they are Nash equilibria
     # 0:{HHY12}, 1:{HHN12}, 2:{LLY12}, 3:{LLN12}, 4:{LHY12}, 5:{LHN12}, 6:{HHY1}, 7:{HHN1}, 8:{LLY1}, 9:{LLN1},
@@ -449,18 +499,20 @@ def LthetaEqMatsForPlot(numLpts, Ltheta_max, numWpts, lambsuplo, lambsuphi, b, c
             retStrat_eq = 3
             lambret_eq = lambretlo
 
-        # wholesale prices
-        w1_eq, w2_eq = WholesalePricesFromEq(eqind, b, c, cSup)
-        # Retailer order quantities
-        q1_eq, q2_eq = RetOrderQuantsFromStrat(retStrat_eq, b, c, w1_eq, w2_eq)
-
+        if eqind < 6:  # Double-supplier sourcing
+            # wholesale prices
+            w1_eq, w2_eq = WholesalePricesFromEq(eqind, b, c, cSup, lambsuplo, lambsuphi, lambretlo, lambrethi, 0,
+                                                 0, sens, fpr, printUpdates)
+            # Retailer order quantities
+            q1_eq, q2_eq = RetOrderQuantsFromStrat(retStrat_eq, b, c, w1_eq, w2_eq)
+            if printUpdates is True:
+                print('Current eq point: ' + eq_curr)
+                print('q1, q2: '+str(round(q1_eq, 3))+', '+str(round(q2_eq, 3)))
+                print('w1, w2: ' + str(round(w1_eq, 3)) + ', ' + str(round(w2_eq, 3)))
+            limitPrice = False
         # Loop through Ltheta; rows are Lr, cols are Ls
         eq_mat = np.zeros((numLpts + 1, numLpts + 1))
         eqQuant_mat = np.zeros((numLpts + 1, numLpts + 1, 2))  # S1, then S2
-        if printUpdates is True:
-            print('Current eq point: ' + eq_curr)
-            print('q1, q2: '+str(round(q1_eq, 3))+', '+str(round(q2_eq, 3)))
-            print('w1, w2: ' + str(round(w1_eq, 3)) + ', ' + str(round(w2_eq, 3)))
         for Lrind, Lr in enumerate(Ltheta_vec):
             for Lsind, Ls in enumerate(Ltheta_vec):
                 if Lr in Lr_insp_vec and Ls in Ls_insp_vec and printUpdates is True:
@@ -468,6 +520,18 @@ def LthetaEqMatsForPlot(numLpts, Ltheta_max, numWpts, lambsuplo, lambsuphi, b, c
                     print('Ls: ' + str(round(Ls, 3)))
                 # Proceed if no transition matrix L indices specified or if we are at our focus point
                 if (Lr_ind_Tmat < 0 and Ls_ind_Tmat < 0) or (Lrind == Lr_ind_Tmat and Lsind == Ls_ind_Tmat):
+                    if eqind >= 6:  # Single-supplier sourcing
+                        # wholesale prices
+                        w1_eq, w2_eq = WholesalePricesFromEq(eqind, b, c, cSup, lambsuplo, lambsuphi, lambretlo,
+                                                             lambrethi, Lr, Ls, sens, fpr, printUpdates, numWpts=numWpts)
+                        # Retailer order quantities
+                        q1_eq, q2_eq = RetOrderQuantsFromStrat(retStrat_eq, b, c, w1_eq, w2_eq)
+                        if printUpdates is True:
+                            print('Current eq point: ' + eq_curr)
+                            print('q1, q2: ' + str(round(q1_eq, 3)) + ', ' + str(round(q2_eq, 3)))
+                            print('w1, w2: ' + str(round(w1_eq, 3)) + ', ' + str(round(w2_eq, 3)))
+                        limitPrice = True
+
                     if Lrind == Lr_ind_Tmat and Lsind == Ls_ind_Tmat:
                         storeTmat = True
                     else:
@@ -505,26 +569,59 @@ def LthetaEqMatsForPlot(numLpts, Ltheta_max, numWpts, lambsuplo, lambsuphi, b, c
                     elif lambsup1_eq == lambsuplo:
                         lambsup1_dev = lambsuphi
                     # Iterate through possible deviation prices for S1
-                    if matVal == 1:
+                    if matVal == 1 and limitPrice is False:
                         breakloop = False
                         for w1_dev in w_vec:
                             if w1_dev != w1_eq and breakloop is False:  # Deviation price cannot be the equilibrium price
                                 # What is retailer policy under deviation?
-                                utilRetVec_eq = UtilsRet_Scen5(lambsup1_dev, lambsup2_eq, Lr, b, c, w1_dev, w2_eq,
-                                                               lambretlo,
-                                                               lambrethi, sens, fpr)
+                                if bothSupsSourced is True:
+                                    utilRetVec_eq = UtilsRet_Scen5(lambsup1_dev, lambsup2_eq, Lr, b, c, w1_dev, w2_eq,
+                                                                   lambretlo, lambrethi, sens, fpr,
+                                                                   onlyDoubleSource=onlyDoubleSource,
+                                                                   onlyQualInvest=onlyQualInvest)
+                                else:
+                                    utilRetVec_eq = UtilsRet_Scen5(lambsup1_dev, lambsup2_eq, Lr, b, c, w1_dev, w2_eq,
+                                                                   lambretlo, lambrethi, sens, fpr,
+                                                                   sourceBothSups=False,
+                                                                   onlyDoubleSource=onlyDoubleSource,
+                                                                   onlyQualInvest=onlyQualInvest)
                                 retStrat_dev = np.argmax(utilRetVec_eq)
                                 if retStrat_dev in [0, 2, 4]:
                                     lambret_dev = lambrethi
                                 else:
                                     lambret_dev = lambretlo
+
+                                # IF SINGLE-SUPPLIER, IS THIS A LIMIT PRICE PREVENTING S2 FROM ENTERING MARKET
+                                validLimit = True
+                                if retStrat_dev in [2, 3]:
+                                    if printUpdates is True:
+                                        print('Verifying if limit price deviation identified...')
+                                    for tempw2 in w_vec:
+                                        for templambsup2 in [lambsuphi, lambsuplo]:
+                                            currRetUtilVec = UtilsRet_Scen5(lambsup1_dev, templambsup2, Lr, b, c,
+                                                                            w1_dev, tempw2, lambretlo, lambrethi, sens,
+                                                                            fpr)
+                                            retBestStrat = np.argmax(currRetUtilVec)
+                                            _, tempq2 = RetOrderQuantsFromStrat(currRetUtilVec[retBestStrat], b, c,
+                                                                                w1_dev, tempw2)
+                                            if templambsup2 == lambsuphi:
+                                                cSup2 = cSup
+                                            else:
+                                                cSup2 = 0
+                                            if retBestStrat in [0, 2, 4]:
+                                                templambret = lambrethi
+                                            else:
+                                                templambret = lambretlo
+                                            if SupUtil(tempq2, tempw2, cSup2, Ls, templambret, templambsup2, sens, fpr) > 0:
+                                                validLimit = False
+
                                 # Get q1 from retailer's preferred strategy
                                 q1_dev, q2_dev = RetOrderQuantsFromStrat(retStrat_dev, b, c, w1_dev, w2_eq)
                                 if lambsup1_dev == lambsuphi:
                                     utilSup1_dev = SupUtil(q1_dev, w1_dev, cSup, Ls, lambret_dev, lambsup1_dev, sens, fpr)
                                 elif lambsup1_dev == lambsuplo:
                                     utilSup1_dev = SupUtil(q1_dev, w1_dev, 0, Ls, lambret_dev, lambsup1_dev, sens, fpr)
-                                if utilSup1_dev > s1util_eq + eps:
+                                if utilSup1_dev > s1util_eq + eps and validLimit is True:
                                     if printUpdates is True:
                                         print('S1 does better with w1=' + str(round(w1_dev, 3)) + ', '
                                               + str(round(utilSup1_dev, 3)) + ' over ' + str(round(s1util_eq, 3)))
@@ -536,7 +633,7 @@ def LthetaEqMatsForPlot(numLpts, Ltheta_max, numWpts, lambsuplo, lambsuphi, b, c
                                     breakloop = True
                     # Check S2 if asymmetric or single-sourcing
                     if (eq_curr in ['LHY12', 'LHN12', 'HHY1', 'HHN1', 'LLY1', 'LLN1', 'HLY1', 'HLN1', 'LHY1', 'LHN1']
-                        and matVal == 1):
+                        and matVal == 1 and limitPrice is False):
                         if lambsup2_eq == lambsuphi:
                             lambsup2_dev = lambsuplo
                         elif lambsup2_eq == lambsuplo:
@@ -546,22 +643,51 @@ def LthetaEqMatsForPlot(numLpts, Ltheta_max, numWpts, lambsuplo, lambsuphi, b, c
                             if w2_dev != w2_eq and breakloop is False:  # Deviation price cannot be the equilibrium price
                                 # What is retailer policy under deviation?
                                 utilRetVec_eq = UtilsRet_Scen5(lambsup1_eq, lambsup2_dev, Lr, b, c, w1_eq, w2_dev,
-                                                               lambretlo, lambrethi, sens, fpr)
+                                                               lambretlo, lambrethi, sens, fpr,
+                                                                   onlyDoubleSource=onlyDoubleSource,
+                                                                   onlyQualInvest=onlyQualInvest)
                                 retStrat_dev = np.argmax(utilRetVec_eq)
                                 if retStrat_dev in [0, 2, 4]:
                                     lambret_dev = lambrethi
                                 else:
                                     lambret_dev = lambretlo
+
+                                # IF SINGLE-SUPPLIER, IS THIS A LIMIT PRICE PREVENTING S2 FROM ENTERING MARKET
+                                validLimit = True
+                                if retStrat_dev in [4, 5]:
+                                    if printUpdates is True:
+                                        print('Verifying if limit price deviation identified...')
+                                    for tempw1 in w_vec:
+                                        for templambsup1 in [lambsuphi, lambsuplo]:
+                                            currRetUtilVec = UtilsRet_Scen5(templambsup1, lambsup2_dev, Lr, b, c,
+                                                                            tempw1, w2_dev, lambretlo, lambrethi,
+                                                                            sens, fpr)
+                                            retBestStrat = np.argmax(currRetUtilVec)
+                                            tempq1, _ = RetOrderQuantsFromStrat(currRetUtilVec[retBestStrat], b, c,
+                                                                                tempw1, w2_dev)
+                                            if templambsup1 == lambsuphi:
+                                                cSup1 = cSup
+                                            else:
+                                                cSup1 = 0
+                                            if retBestStrat in [0, 2, 4]:
+                                                templambret = lambrethi
+                                            else:
+                                                templambret = lambretlo
+                                            if SupUtil(tempq1, tempw1, cSup1, Ls, templambret, templambsup1, sens,
+                                                       fpr) > 0:
+                                                validLimit = False
+
                                 # Get q2 from retailer's preferred strategy
                                 q1_dev, q2_dev = RetOrderQuantsFromStrat(retStrat_dev, b, c, w1_eq, w2_dev)
                                 if lambsup2_dev == lambsuphi:
                                     utilSup2_dev = SupUtil(q2_dev, w2_dev, cSup, Ls, lambret_dev, lambsup2_dev, sens, fpr)
                                 elif lambsup2_dev == lambsuplo:
                                     utilSup2_dev = SupUtil(q2_dev, w2_dev, 0, Ls, lambret_dev, lambsup2_dev, sens, fpr)
-                                if utilSup2_dev > s2util_eq + eps:
+                                if utilSup2_dev > s2util_eq + eps and validLimit is True:
                                     if printUpdates is True:
                                         print('S2 does better with w2=' + str(round(w2_dev, 3))+ ', '
                                               + str(round(utilSup2_dev, 3)) + ' over ' + str(round(s2util_eq, 3)))
+                                        print('where retailer opts for ' + str(retStrat_dev))
                                     matVal = np.nan
                                     if storeTmat is True and Tmat[eqind, :].sum() == 0:
                                         # Store transition from current equilibrium
@@ -569,14 +695,23 @@ def LthetaEqMatsForPlot(numLpts, Ltheta_max, numWpts, lambsuplo, lambsuphi, b, c
                                     breakloop = True
 
                     # CHECK 3: Retailer prefers the equilibrium strategy
-                    utilRetVec_eq = UtilsRet_Scen5(lambsup1_eq, lambsup2_eq, Lr, b, c, w1_eq, w2_eq, lambretlo,
-                                                   lambrethi, sens, fpr)
-                    if np.argmax(utilRetVec_eq) != retStrat_eq and matVal == 1:
+                    # If currently in exclusive sourcing, retailer cannot order from S2
+                    if bothSupsSourced is True:
+                        utilRetVec_eq = UtilsRet_Scen5(lambsup1_eq, lambsup2_eq, Lr, b, c, w1_eq, w2_eq, lambretlo,
+                                                   lambrethi, sens, fpr,
+                                                   onlyDoubleSource=onlyDoubleSource,
+                                                   onlyQualInvest=onlyQualInvest)
+                    else:
+                        utilRetVec_eq = UtilsRet_Scen5(lambsup1_eq, lambsup2_eq, Lr, b, c, w1_eq, w2_eq, lambretlo,
+                                                       lambrethi, sens, fpr, sourceBothSups=False,
+                                                       onlyDoubleSource=onlyDoubleSource,
+                                                       onlyQualInvest=onlyQualInvest)
+                    if utilRetVec_eq[np.argmax(utilRetVec_eq)] > utilRetVec_eq[retStrat_eq] + eps and matVal == 1:
                         matVal = np.nan
                         if printUpdates is True:
                             print('The retailer prefers strategy ' + str(np.argmax(utilRetVec_eq)) + retStratToStr(
-                                np.argmax(utilRetVec_eq)) + ', ' + str(utilRetVec_eq[np.argmax(utilRetVec_eq)]) +
-                                  ' util instead of ' + str(utilRetVec_eq[retStrat_eq]))
+                                np.argmax(utilRetVec_eq)) + ', '+str(round(utilRetVec_eq[np.argmax(utilRetVec_eq)],3)) +
+                                  ' util instead of ' + str(round(utilRetVec_eq[retStrat_eq], 3)))
                         if storeTmat is True and Tmat[eqind, :].sum() == 0:
                             # Store transition from current equilibrium
                             Tmat[eqind, GetTransInd(eq_curr, retPref=np.argmax(utilRetVec_eq))] = 1
@@ -584,6 +719,10 @@ def LthetaEqMatsForPlot(numLpts, Ltheta_max, numWpts, lambsuplo, lambsuphi, b, c
                     # if eq_curr == 'HHY1' and np.argmax(utilRetVec_eq) == 6:
                     #     print('No non-negative utility for all players possible')
                     #     noeq_mat[Lrind, Lsind] = 1
+
+                    # CHECK 4: POSITIVE Q and w
+                    if q1_eq + q2_eq == 0 or w1_eq + w2_eq == 0:
+                        matVal = np.nan
 
                     eq_mat[Lrind, Lsind] = matVal
                     if matVal == 1:  # Store quantities
@@ -626,26 +765,33 @@ Lr_insp_min, Lr_insp_max = 0.1415, 0.143
 Ls_insp_min, Ls_insp_max = 0.145, 0.151
 Lr_ind_Tmat, Ls_ind_Tmat = 19, 20
 
+
+
 eq_list = ['HHY12', 'HHN12', 'LLY12', 'LLN12', 'LHY12', 'LHN12', 'HHY1', 'HHN1', 'LLY1', 'LLN1', 'HLY1', 'HLN1', 'LHY1',
            'LHN1']
 
-numLpts = 20  # Refinement along each axis for plotting
-numWpts = 30  # Refinement for deviation prices
-Ltheta_max = 0.7
+numLpts = 7  # Refinement along each axis for plotting
+numWpts = 50  # Refinement for deviation prices
+Ltheta_max = 1.5
 Ltheta_vec = np.arange(0, Ltheta_max + 0.00001, Ltheta_max / numLpts)
 eps = 0.001  # tolerance for switching strategies
+doubleSource = False
+retQualInvest = False
 
-eqStrat_matList, eqQuant_matList, _ = LthetaEqMatsForPlot(numLpts, Ltheta_max, numWpts, lambsuplo_0, lambsuphi_0,
-                                                             b_0, c_0, cSup_0, lambretlo_0, lambrethi_0, sens_0, fpr_0,
-                                                             printUpdates=False, Lr_insp_min=Lr_insp_min,
-                                                             Lr_insp_max=Lr_insp_max, Ls_insp_min=Ls_insp_min,
-                                                             Ls_insp_max=Ls_insp_max)
+eqStrat_matList, eqQuant_matList, _ = LthetaEqMatsForPlot(numLpts, Ltheta_max, numWpts, lambsuplo_0, lambsuphi_0, b_0,
+                                                          c_0, cSup_0, lambretlo_0, lambrethi_0, sens_0, fpr_0,
+                                                          printUpdates=False, Lr_insp_min=Lr_insp_min,
+                                                          Lr_insp_max=Lr_insp_max, Ls_insp_min=Ls_insp_min,
+                                                          Ls_insp_max=Ls_insp_max, onlyDoubleSource=doubleSource,
+                                                          onlyQualInvest=retQualInvest)
 
 eqStrat_matList, eqQuant_matList, Tmat = LthetaEqMatsForPlot(numLpts, Ltheta_max, numWpts, lambsuplo_0, lambsuphi_0,
                                                              b_0, c_0, cSup_0, lambretlo_0, lambrethi_0, sens_0, fpr_0,
                                                              printUpdates=True, Lr_insp_min=Lr_insp_min,
                                                              Lr_insp_max=Lr_insp_max, Ls_insp_min=Ls_insp_min,
-                                                             Ls_insp_max=Ls_insp_max, Lr_ind_Tmat=0, Ls_ind_Tmat=9)
+                                                             Ls_insp_max=Ls_insp_max, Lr_ind_Tmat=8, Ls_ind_Tmat=2,
+                                                             onlyDoubleSource=doubleSource,
+                                                             onlyQualInvest=retQualInvest)
 
 # Fill in gaps with no equilibria
 # Initialize with 'no profit' equilibrium
@@ -663,7 +809,8 @@ for Lr_ind, Lr in enumerate(Ltheta_vec):
                                                  cSup_0, lambretlo_0, lambrethi_0, sens_0, fpr_0, printUpdates=False,
                                                  Lr_insp_min=Lr_insp_min, Lr_insp_max=Lr_insp_max,
                                                  Ls_insp_min=Ls_insp_min, Ls_insp_max=Ls_insp_max, Lr_ind_Tmat=Lr_ind,
-                                                 Ls_ind_Tmat=Ls_ind)
+                                                 Ls_ind_Tmat=Ls_ind, onlyDoubleSource=doubleSource,
+                                                 onlyQualInvest=retQualInvest)
             currTvec = steadyStateMat(currTmat)
             if currTvec[:-1].sum() == 0:  # Only {N} possible
                 # print('{N} value found')
@@ -682,10 +829,18 @@ for Lr_ind, Lr in enumerate(Ltheta_vec):
                     mixInd = eqMixName_List.index(currTnames)
                     eqMix_matList[mixInd][Lr_ind, Ls_ind] = 1
 
+# Drop overlapping equilibria if equivalent
+equivPairs_list = [[6, 10], [7, 11], [8, 12], [9, 13]]
+for Lr_ind, Lr in enumerate(Ltheta_vec):
+    for Ls_ind, Ls in enumerate(Ltheta_vec):
+        for pairlist in equivPairs_list:
+            if np.nansum([eqStrat_matList[i][Lr_ind, Ls_ind] for i in pairlist]) > 1:
+                eqStrat_matList[pairlist[1]][Lr_ind, Ls_ind] = np.nan
+
 # Now do plotting
 d = np.linspace(0, Ltheta_max, numLpts+1)
 
-alval = 0.7  # Transparency for plots
+alval = 0.6  # Transparency for plots
 values = [0, 1]
 labels = ['{HHY12}', '{HHN12}', '{LLY12}', '{LLN12}', '{LHY12}', '{LHN12}', '{HHY1}', '{HHN1}', '{LLY1}', '{LLN1}',
           '{HLY1}', '{HLN1}', '{LHY1}', '{LHN1}']
@@ -741,7 +896,7 @@ axStrat.set_title('Equilibria strategies')
 # create a patch for every color
 legwidth = 20
 wraplabels = ['\n'.join(textwrap.wrap(labels[i], width=legwidth)) for i in range(len(labels))]
-patches = [mpatches.Patch(color=eqcolors[i], edgecolor='black', label=wraplabels[i]) for i in range(len(eqcolors))]
+patches = [mpatches.Patch(color=eqcolors[i], edgecolor='black', label=wraplabels[i], alpha=alval) for i in range(len(eqcolors))]
 # put those patched as legend-handles into the legend
 axStrat.legend(handles=patches, bbox_to_anchor=(-0.3, 1.0), loc='upper right', borderaxespad=0.1, fontsize=8)
 
@@ -750,6 +905,10 @@ eqQuant_plot = GetQuantMatFromEqMats(eqStrat_matList[:-len(eqMix_matList)], eqQu
 imQuant = axQuant.imshow(eqQuant_plot.T, vmin=0, vmax=1,
                     extent=(Ltheta_vec.min(), Ltheta_vec.max(), Ltheta_vec.min(), Ltheta_vec.max()),
                     origin="lower", cmap='Blues')
+imQuant_N = axQuant.imshow(eqStrat_matList[14].T, vmin=0, vmax=1,
+                    extent=(Ltheta_vec.min(), Ltheta_vec.max(), Ltheta_vec.min(), Ltheta_vec.max()),
+                    origin="lower",
+                    cmap=matplotlib.colors.ListedColormap(['white', 'black'], name='from_list', N=None))
 axQuant.set_xlabel(r'$L^{R}_{\theta}$', fontsize=12)
 axQuant.set_ylabel(r'$L^{S}_{\theta}$', rotation=0, fontsize=12, labelpad=3)
 axQuant.set_title('Equilibria quantities')
@@ -761,9 +920,17 @@ retQual_plot, supQual_plot = GetQualMatsFromMixedEqMat(eqStrat_matList[:-len(eqM
 imSupQual = axSupQual.imshow(supQual_plot.T, vmin=-0.5, vmax=1.5,
                     extent=(Ltheta_vec.min(), Ltheta_vec.max(), Ltheta_vec.min(), Ltheta_vec.max()),
                     origin="lower", cmap='Grays')
+imSupQual_N = axSupQual.imshow(eqStrat_matList[14].T, vmin=0, vmax=1,
+                    extent=(Ltheta_vec.min(), Ltheta_vec.max(), Ltheta_vec.min(), Ltheta_vec.max()),
+                    origin="lower",
+                    cmap=matplotlib.colors.ListedColormap(['white', 'black'], name='from_list', N=None))
 imRetQual = axRetQual.imshow(retQual_plot.T, vmin=-0.5, vmax=1.5,
                     extent=(Ltheta_vec.min(), Ltheta_vec.max(), Ltheta_vec.min(), Ltheta_vec.max()),
                     origin="lower", cmap='Grays')
+imRetQual_N = axRetQual.imshow(eqStrat_matList[14].T, vmin=0, vmax=1,
+                    extent=(Ltheta_vec.min(), Ltheta_vec.max(), Ltheta_vec.min(), Ltheta_vec.max()),
+                    origin="lower",
+                    cmap=matplotlib.colors.ListedColormap(['white', 'black'], name='from_list', N=None))
 axSupQual.set_xlabel(r'$L^{R}_{\theta}$', fontsize=12)
 axSupQual.set_ylabel(r'$L^{S}_{\theta}$', rotation=0, fontsize=12, labelpad=3)
 axSupQual.set_title('Supplier quality levels')
@@ -778,6 +945,10 @@ imSPUtil = axSPUtil.imshow(SPUtil_plot.T, vmin=np.nanmin(SPUtil_plot)-0.2*(np.na
                                           vmax=np.nanmax(SPUtil_plot)+0.2*(np.nanmax(SPUtil_plot)-np.nanmin(SPUtil_plot)),
                                 extent=(Ltheta_vec.min(), Ltheta_vec.max(), Ltheta_vec.min(), Ltheta_vec.max()),
                                 origin="lower", cmap='Greens')
+imSPUtil_N = axSPUtil.imshow(eqStrat_matList[14].T, vmin=0, vmax=1,
+                    extent=(Ltheta_vec.min(), Ltheta_vec.max(), Ltheta_vec.min(), Ltheta_vec.max()),
+                    origin="lower",
+                    cmap=matplotlib.colors.ListedColormap(['white', 'black'], name='from_list', N=None))
 axSPUtil.set_xlabel(r'$L^{R}_{\theta}$', fontsize=12)
 axSPUtil.set_ylabel(r'$L^{S}_{\theta}$', rotation=0, fontsize=12, labelpad=3)
 axSPUtil.set_title('Social planner utility')
@@ -845,295 +1016,5 @@ alpha_slider.on_changed(sliders_on_changed)
 
 plt.subplots_adjust(left=None, bottom=0.07, right=None, top=0.85, wspace=0.5, hspace=0.4)
 plt.show(block=True)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-######################
-######################
-# SCENARIO 5
-######################
-######################
-w12_delt_0 = 0.05
-lamb12_delt_0 = 0.05
-
-
-lambsup1, lambsup2 = 0.9, 0.9-lamb12_delt_0
-Ltheta = 0.12
-UtilsRet_Scen5(lambsup1, lambsup2, Ltheta, b_0, c_0, w_0, w_0-w12_delt_0, lambretlo_0, lambrethi_0, sens_0, fpr_0)
-
-alph = 0.9
-b, c, w1, w2, lambretlo, lambrethi, sens, fpr = b_0, c_0, w_0, w_0-w12_delt_0,lambretlo_0,lambrethi_0,sens_0,fpr_0
-
-def InducedPolicy_Scen5(alph, lambsup1, lambsup2, Ltheta_vec, b, c, w1, w2, lambretlo, lambrethi, sens, fpr):
-    # Evaluate retailer's preferred policies WRT Ltheta_vec values, add to a policy list if it's not yet included
-    retpolicy_list = []
-    for Ltheta in Ltheta_vec:
-        curr_retutils = UtilsRet_Scen5(lambsup1, lambsup2, Ltheta, b, c, w1, w2, lambretlo, lambrethi, sens, fpr)
-        curr_retpolicy = np.argmax(curr_retutils)
-        if not curr_retpolicy in retpolicy_list:
-            retpolicy_list.append(curr_retpolicy)
-    # Identify possible retailer policy that is preferred by SP
-    SPutil_list = []
-    for policy in retpolicy_list:
-        if policy == 0:  # {Y12}
-            q1 = max((1 - b - c + b * c - w1 + b * w2) / (2 * (1 - (b ** 2))), 0)
-            q2 = max((1 - b - c + b * c - w2 + b * w1) / (2 * (1 - (b ** 2))), 0)
-            SPutil_list.append(UtilSP(q1, q2, lambrethi, lambsup1, lambsup2, alph))
-        if policy == 1:  # {N12}
-            q1 = max((1 - b - w1 + b * w2) / (2 * (1 - (b ** 2))), 0)
-            q2 = max((1 - b - w2 + b * w1) / (2 * (1 - (b ** 2))), 0)
-            SPutil_list.append(UtilSP(q1, q2, lambretlo, lambsup1, lambsup2, alph))
-        if policy == 2:  # {Y1}
-            q1 = (1 - c - w1)/2
-            q2 = 0
-            SPutil_list.append(UtilSP(q1, q2, lambrethi, lambsup1, lambsup2, alph))
-        if policy == 3:  # {N1}
-            q1 = (1 - w1) / 2
-            q2 = 0
-            SPutil_list.append(UtilSP(q1, q2, lambretlo, lambsup1, lambsup2, alph))
-        if policy == 4:  # {Y2}
-            q1 = 0
-            q2 = (1 - c - w2) / 2
-            SPutil_list.append(UtilSP(q1, q2, lambrethi, lambsup1, lambsup2, alph))
-        if policy == 5:  # {N2}
-            q1 = 0
-            q2 = (1 - w2) / 2
-            SPutil_list.append(UtilSP(q1, q2, lambretlo, lambsup1, lambsup2, alph))
-        if policy == 6:  # {N}
-            SPutil_list.append(UtilSP(0, 0, lambrethi, lambsup1, lambsup2,  alph))
-    SPpreferpol = int(retpolicy_list[np.argmax(SPutil_list)])
-
-    return int(SPpreferpol)
-
-def RetPolicyWRTLtheta_Scen5(lambsup1, lambsup2, alph, Ltheta_vec, b, c, w1, w2,
-                             lambretlo, lambrethi, sens, fpr):
-    # Returns an updated set of plottable policy lines for each value in Ltheta_vec
-    retpolicy_mat = np.empty((7, Ltheta_vec.shape[0]))
-    retpolicy_mat[:] = np.nan
-    for Lthetaind, Ltheta in enumerate(Ltheta_vec):
-        curr_retutils = UtilsRet_Scen5(lambsup1, lambsup2, Ltheta, b, c, w1, w2, lambretlo, lambrethi, sens, fpr)
-        # Obtain SPs utility for retailer's chosen policy
-        if np.argmax(curr_retutils) == 0:  # {Y12}
-            q1 = max((1 - b - c + b * c - w1 + b * w2) / (2 * (1 - (b ** 2))), 0)
-            q2 = max((1 - b - c + b * c - w2 + b * w1) / (2 * (1 - (b ** 2))), 0)
-            lambret = lambrethi
-        if np.argmax(curr_retutils) == 1:  # {N12}
-            q1 = max((1 - b - w1 + b * w2) / (2 * (1 - (b ** 2))), 0)
-            q2 = max((1 - b - w2 + b * w1) / (2 * (1 - (b ** 2))), 0)
-            lambret = lambretlo
-        if np.argmax(curr_retutils) == 2:  # {Y1}
-            q1, q2 = 0.5 * (1 - c - w1), 0
-            lambret = lambrethi
-        if np.argmax(curr_retutils) == 3:  # {N1}
-            q1, q2 = 0.5 * (1 - w1), 0
-            lambret = lambretlo
-        if np.argmax(curr_retutils) == 4:  # {Y2}
-            q1, q2 = 0, 0.5 * (1 - c - w2)
-            lambret = lambrethi
-        if np.argmax(curr_retutils) == 5:  # {N2}
-            q1, q2 = 0, 0.5 * (1 - w2)
-            lambret = lambretlo
-        if np.argmax(curr_retutils) == 6:  # {N}
-            q1, q2 = 0, 0
-            lambret = lambretlo
-        retpolicy_mat[np.argmax(curr_retutils), Lthetaind] = UtilSP(q1, q2, lambret, lambsup1, lambsup2, alph)
-    return retpolicy_mat
-
-testmat = RetPolicyWRTLtheta_Scen5(lambsup1, lambsup2, alph, Ltheta_vec, b, c, w1, w2,lambretlo, lambrethi, sens, fpr)
-
-def inducedpolforplot_Scen5_deltlamb(numpts, Ltheta_vec, lambsup1, b, c, w1, wdelt, lambretlo, lambrethi, sens, fpr):
-    # Returns an updated induced-policy matrix for the given parameters
-    inducepolicymat = np.empty((numpts, numpts))
-    for lsdeltind, lsdelt in enumerate(np.linspace(0.01, lambsup1-0.01, numpts)):  # delta Lambda
-        for aind, a in enumerate(np.linspace(0.01, 0.99, numpts)):  # alpha value for SP
-            inducepolicymat[lsdeltind, aind] = int(round(InducedPolicy_Scen5(a, lambsup1, lambsup1-lsdelt, Ltheta_vec,
-                                                                             b, c, w1, w1-wdelt, lambretlo, lambrethi,
-                                                                             sens, fpr)))
-            #print(str(ls) + ' ' + str(a) + ': ' + str(inducepolicymat[lsind, aind]))
-    return inducepolicymat
-
-def inducedpolforplot_Scen5_deltw(numpts, Ltheta_vec, lambsup1, lambdelt, b, c, w1, lambretlo, lambrethi, sens, fpr):
-    # Returns an updated induced-policy matrix for the given parameters
-    inducepolicymat = np.empty((numpts, numpts))
-    for wdeltind, wdelt in enumerate(np.linspace(0.01, w1-0.01, numpts)):  # delta w
-        for aind, a in enumerate(np.linspace(0.01, 0.99, numpts)):  # alpha value for SP
-            inducepolicymat[wdeltind, aind] = int(round(InducedPolicy_Scen5(a, lambsup1, lambsup1-lambdelt, Ltheta_vec,
-                                                                             b, c, w1, w1-wdelt, lambretlo, lambrethi,
-                                                                             sens, fpr)))
-            #print(str(ls) + ' ' + str(a) + ': ' + str(inducepolicymat[lsind, aind]))
-    return inducepolicymat
-
-numpts = 15  # MODIFY AS NEEDED
-
-inducepolicymat_deltlamb = inducedpolforplot_Scen5_deltlamb(numpts, Ltheta_vec, lambsup1, b_0, c_0, w_0, w12_delt_0,
-                                                     lambretlo_0, lambrethi_0, sens_0, fpr_0)
-
-inducepolicymat_wlamb = inducedpolforplot_Scen5_deltw(numpts, Ltheta_vec, lambsup1, lamb12_delt_0, b_0, c_0, w_0,
-                                                     lambretlo_0, lambrethi_0, sens_0, fpr_0)
-
-d1 = np.linspace(0.01, 0.99, numpts)
-d2_lamb = np.linspace(0.01, lambsup1-0.01, numpts)
-d2_w = np.linspace(0.01, w1-0.01, numpts)
-
-al_lambgrid, deltlambgrid = np.meshgrid(d1, d2_lamb)
-al_wgrid, deltwgrid = np.meshgrid(d1, d2_w)
-
-values = [0, 1, 2, 3, 4, 5, 6]
-labels = ['{Y12}', '{N12}', '{Y1}', '{N1}', '{Y2}', '{N2}', '{N}']
-cmapname = 'viridis'
-
-fig = plt.figure(figsize=(20,10))
-fig.suptitle('Scenario 5: '+r'$\Lambda_1=\Lambda_2+\Delta\Lambda,w_1=w_2+\Delta w$', fontsize=18, fontweight='bold')
-ax1 = plt.subplot2grid((3, 2), (0,0), colspan=2)
-ax2 = plt.subplot2grid((3, 2), (1,0), rowspan=2)
-ax3 = plt.subplot2grid((3, 2), (1,1), rowspan=2)
-
-fig.subplots_adjust(bottom=0.3)
-
-im2 = ax2.imshow(inducepolicymat_deltlamb, vmin=0, vmax=values[-1],
-                extent=(al_lambgrid.min(), al_lambgrid.max(), deltlambgrid.min(), deltlambgrid.max()),
-                origin="lower", cmap=cmapname, interpolation='none')
-im3 = ax3.imshow(inducepolicymat_wlamb, vmin=0, vmax=values[-1],
-                extent=(al_wgrid.min(), al_wgrid.max(),deltwgrid.min(), deltwgrid.max()),
-                origin="lower", cmap=cmapname, interpolation='none')
-colors = [im2.cmap(im2.norm(value)) for value in values]
-
-lambsup1, alph = 0.8, 0.9
-retpolicy_mat = RetPolicyWRTLtheta_Scen5(lambsup1, lambsup1-lamb12_delt_0, alph, Ltheta_vec, b_0, c_0, w_0,
-                                         w_0-w12_delt_0, lambretlo_0, lambrethi_0, sens_0, fpr_0)
-
-[line0] = ax1.plot(Ltheta_vec, retpolicy_mat[0], linewidth=7, color=colors[0])
-[line1] = ax1.plot(Ltheta_vec, retpolicy_mat[1], linewidth=7, color=colors[1])
-[line2] = ax1.plot(Ltheta_vec, retpolicy_mat[2], linewidth=7, color=colors[2])
-[line3] = ax1.plot(Ltheta_vec, retpolicy_mat[3], linewidth=7, color=colors[3])
-[line4] = ax1.plot(Ltheta_vec, retpolicy_mat[4], linewidth=7, color=colors[4])
-[line5] = ax1.plot(Ltheta_vec, retpolicy_mat[5], linewidth=7, color=colors[5])
-[line6] = ax1.plot(Ltheta_vec, retpolicy_mat[6], linewidth=7, color=colors[6])
-
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-from mpl_toolkits.axes_grid1.axes_divider import make_axes_area_auto_adjustable
-
-ax1.set_xlim([0, 2.0])
-ax1.set_ylim([-0.6, 0.8])
-ax1.set_title('SP utility vs retailer strategy, as function of '+r'$L_{\theta}$')
-ax1.set_xlabel(r'$L_\theta$', fontsize=12)
-ax1.set_ylabel(r'$U_{SP}$', rotation=0, fontsize=12, labelpad=15)
-
-# Add sliders for changing the parameters
-slstrtval = 0.28
-slht = 0.01
-slvertgap = 0.02
-b_slider_ax = fig.add_axes([0.1, slstrtval, 0.65, slht])
-b_slider = Slider(b_slider_ax, 'b', 0.01, 0.99, valinit=b_0)
-c_slider_ax = fig.add_axes([0.1, slstrtval-slvertgap, 0.65, slht])
-c_slider = Slider(c_slider_ax, 'c', 0.01, 0.99, valinit=c_0)
-w_slider_ax = fig.add_axes([0.1, slstrtval-slvertgap*2, 0.65, slht])
-w_slider = Slider(w_slider_ax, r'$w_1$', 0.01, 0.99, valinit=w_0)
-wdelt_slider_ax = fig.add_axes([0.1, slstrtval-slvertgap*3, 0.65, slht])
-wdelt_slider = Slider(wdelt_slider_ax, r'$\Delta w$', 0.01, 0.5, valinit=w12_delt_0)
-lambretlo_slider_ax = fig.add_axes([0.1, slstrtval-slvertgap*4, 0.65, slht])
-lambretlo_slider = Slider(lambretlo_slider_ax, r'$\lambda^{lo}$', 0.01, 0.99, valinit=lambretlo_0)
-lambrethi_slider_ax = fig.add_axes([0.1, slstrtval-slvertgap*5, 0.65, slht])
-lambrethi_slider = Slider(lambrethi_slider_ax, r'$\lambda^{hi}$', 0.01, 0.99, valinit=lambrethi_0)
-sens_slider_ax = fig.add_axes([0.1, slstrtval-slvertgap*6, 0.65, slht])
-sens_slider = Slider(sens_slider_ax, r'$\rho$', 0.5, 0.99, valinit=sens_0)
-fpr_slider_ax = fig.add_axes([0.1, slstrtval-slvertgap*7, 0.65, slht])
-fpr_slider = Slider(fpr_slider_ax, r'$\phi$', 0.01, 0.2, valinit=fpr_0)
-lambsup1_slider_ax = fig.add_axes([0.1, slstrtval-slvertgap*8, 0.65, slht])
-lambsup1_slider = Slider(lambsup1_slider_ax, r'$\Lambda_1$', 0.01, 0.99, valinit=lambsup1)
-lambdelt_slider_ax = fig.add_axes([0.1, slstrtval-slvertgap*9, 0.65, slht])
-lambdelt_slider = Slider(lambdelt_slider_ax, r'$\Delta\Lambda$', 0.01, 0.5, valinit=lamb12_delt_0)
-
-alpha_slider_ax = fig.add_axes([0.3, slstrtval-slvertgap*9-slht*4, 0.35, slht])
-alpha_slider = Slider(alpha_slider_ax, r'$\alpha$', 0.01, 0.99, valinit=alph)
-
-
-ax2.set_xlim([0, 1])
-ax2.set_title('SPs best induced retailer strategy')
-ax2.set_xlabel(r'$\alpha$', fontsize=12)
-ax2.set_ylabel(r'$\Delta\Lambda$', rotation=0, fontsize=12, labelpad=15)
-
-ax3.set_xlim([0, 1])
-ax3.set_title('SPs best induced retailer strategy')
-ax3.set_xlabel(r'$\alpha$', fontsize=12)
-ax3.set_ylabel(r'$\Delta w$', rotation=0, fontsize=12, labelpad=15)
-
-# create a patch (proxy artist) for every color
-patches = [mpatches.Patch(color=colors[i], label=labels[i]) for i in range(len(values))]
-# put those patched as legend-handles into the legend
-fig.legend(handles=patches, loc='upper left', borderaxespad=0.05, fontsize=12)
-def sliders_on_changed(val):
-    retpolicy_mat = RetPolicyWRTLtheta_Scen5(lambsup1_slider.val, lambsup1_slider.val-lambdelt_slider.val,
-                                             alpha_slider.val, Ltheta_vec, b_slider.val, c_slider.val,
-                                             w_slider.val, w_slider.val-wdelt_slider.val, lambretlo_slider.val,
-                                             lambrethi_slider.val, sens_slider.val, fpr_slider.val)
-
-    line0.set_ydata(retpolicy_mat[0])
-    line1.set_ydata(retpolicy_mat[1])
-    line2.set_ydata(retpolicy_mat[2])
-    line3.set_ydata(retpolicy_mat[3])
-    line4.set_ydata(retpolicy_mat[4])
-    line5.set_ydata(retpolicy_mat[5])
-    line6.set_ydata(retpolicy_mat[6])
-
-    im2.set_data(inducedpolforplot_Scen5_deltlamb(numpts, Ltheta_vec, lambsup1_slider.val, b_slider.val, c_slider.val,
-                                                  w_slider.val, wdelt_slider.val, lambretlo_slider.val,
-                                                  lambrethi_slider.val, sens_slider.val, fpr_slider.val))
-    im2.set_extent(extent=(al_wgrid.min(), al_wgrid.max(), deltlambgrid.min(), lambsup1_slider.val))
-    im3.set_data(inducedpolforplot_Scen5_deltw(numpts, Ltheta_vec, lambsup1_slider.val, lambdelt_slider.val,
-                                               b_slider.val, c_slider.val, w_slider.val, lambretlo_0, lambrethi_0,
-                                               sens_0, fpr_0))
-    im3.set_extent(extent=(al_wgrid.min(), al_wgrid.max(), deltwgrid.min(), w_slider.val))
-
-    fig.canvas.draw_idle()
-
-b_slider.on_changed(sliders_on_changed)
-c_slider.on_changed(sliders_on_changed)
-w_slider.on_changed(sliders_on_changed)
-wdelt_slider.on_changed(sliders_on_changed)
-lambretlo_slider.on_changed(sliders_on_changed)
-lambrethi_slider.on_changed(sliders_on_changed)
-sens_slider.on_changed(sliders_on_changed)
-fpr_slider.on_changed(sliders_on_changed)
-lambsup1_slider.on_changed(sliders_on_changed)
-lambdelt_slider.on_changed(sliders_on_changed)
-alpha_slider.on_changed(sliders_on_changed)
-
-make_axes_area_auto_adjustable(ax1)
-make_axes_area_auto_adjustable(ax2)
-make_axes_area_auto_adjustable(ax3)
-
-plt.show(block=True)
-
-
-
-
-
-
-
-
-
 
 
