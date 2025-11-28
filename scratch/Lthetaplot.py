@@ -136,7 +136,7 @@ def SupAsymLimitPrices(b, c, cSup, retQualInvest, lambsuphi, lambsuplo, lambreth
         lambret = lambretlo
         retCurrStrat = 1
     w1max = max(((b-1) * (b+2) * (c-1) + (b*cSup)) / (4-b**2), 0)
-    w1lim, w2lim = 0.001, 0.999  # Initialize limit prices
+    w1lim, w2lim = 0.0, 1.0  # Initialize limit prices
     wVec = np.arange(1 / numWpts, 1, 1 / numWpts)
     for w1curr in wVec:
         if w1curr <= w1max:
@@ -169,19 +169,35 @@ def SupAsymLimitPrices(b, c, cSup, retQualInvest, lambsuphi, lambsuplo, lambreth
                                                     lambrethi, sens, fpr)
                     print('New limit price: ' + str(round(w1curr, 3)) + ', ' + str(round(w2lim, 3)))
                     print('Ret util: ' + str(round(max(currRetUtilVec),3)))
-    # Final check is if the resulting utility for S1 is preferable to that under on-path HHY12/HHN12
+    # Final check is if the resulting utility for S1 is preferable to that under on-path HHY12/HHN12 OR LLY12/LLN12
+    # First, check HHY12/HHN12
     w1alt, w2alt = SupSymPrices(b, c, cSup)
     q1alt, _ = RetOrderQuantsFromStrat(retCurrStrat, b, c, w1alt, w2alt)
     S1utilalt = SupUtil(q1alt, w1alt, cSup, LthetaS, lambret, lambsuphi, sens, fpr)
     # Get utility under limit price
     q1lim, _ = RetOrderQuantsFromStrat(retCurrStrat, b, c, w1lim, w2lim)
     S1utillim = SupUtil(q1lim, w1lim, 0, LthetaS, lambret, lambsuplo, sens, fpr)
-    if S1utilalt > S1utillim:
-        # On-path HH is preferable for S1
-        if printUpdate is True:
-            print('S1 prefers the on-path equilibrium, util of '+str(round(S1utilalt,3))+' vs '+str(round(S1utillim,3)))
-        w1lim, w2lim = 0.001, 0.999
+    # if S1utilalt > S1utillim:
+    #     # On-path HH is preferable for S1
+    #     if printUpdate is True:
+    #         print('S1 prefers the on-path equilibrium, util of '+str(round(S1utilalt,3))+' vs '+str(round(S1utillim,3)))
+    #     w1lim, w2lim = 0.0, 1.0
+    # # Now check LLY12/LLN12
+    # w1alt, w2alt = SupSymPrices(b, c, 0)
+    # q1alt, _ = RetOrderQuantsFromStrat(retCurrStrat, b, c, w1alt, w2alt)
+    # S1utilalt = SupUtil(q1alt, w1alt, cSup, LthetaS, lambret, lambsuphi, sens, fpr)
+    # if S1utilalt > S1utillim:
+    #     # On-path LL is preferable for S1
+    #     if printUpdate is True:
+    #         print('S1 prefers the on-path equilibrium, util of '+str(round(S1utilalt,3))+' vs '+str(round(S1utillim,3)))
+    #     w1lim, w2lim = 0.0, 1.0
     return w1lim, w2lim
+
+def AsymLthetaRLB(b,cSup,lambsuplo):
+    '''Returns lower bound on LthetaR that ensures availability of limit price to low-quality S1'''
+    topterm = 32 + b*(-16*cSup+ b*(-48-3*(b**4)+ (b**3)*(2-6*cSup)+4*(cSup**2)-(b**2)*(-3+cSup)*(7+3*cSup)+4*b*(-1+5*cSup)))
+    botterm = 64*((-2+b**2)**2)*(-1+(b**2))*(-1+(lambsuplo**2))
+    return topterm / botterm
 
 def SupMinPriceSing(c, cSup, retQualInvest, sQualInvest, lambsuphi, lambsuplo, lambret, LthetaS, sens, fpr, eps=0.01):
     # Returns minimum supplier wholesale price under single-supplier sourcing such that supplier utility is zero
@@ -838,12 +854,12 @@ def LthetaEqMatsForPlot(numLpts, LthetaR_max, LthetaS_max, numWpts, lambsuplo, l
 # Define policy function when all parameters are fixed
 alph_0 = 0.8
 b_0 = 0.25
-c_0 = 0.03
-cSup_0 = 0.15
+c_0 = 0.00
+cSup_0 = 0.2
 w_0 = 0.075
-lambretlo_0, lambrethi_0 = 0.6, 0.98
-sens_0, fpr_0 = 0.8, 0.01
-lambsuplo_0, lambsuphi_0 = 0.8, 0.98
+lambretlo_0, lambrethi_0 = 0.6, 1.0
+sens_0, fpr_0 = 1.0, 0.00
+lambsuplo_0, lambsuphi_0 = 0.8, 1.0
 lambsup, lambsup1, lambsup2 = 0.9, 0.9, 0.9
 
 # HIGH LR, LOW LS REGION
@@ -870,7 +886,7 @@ LthetaR_max, LthetaS_max = 1.6, 0.8
 LthetaR_vec = np.arange(0, LthetaR_max + 0.00001, LthetaR_max / numLpts)
 LthetaS_vec = np.arange(0, LthetaS_max + 0.00001, LthetaS_max / numLpts)
 eps = 0.001  # tolerance for switching strategies
-doubleSource = False
+doubleSource = True
 retQualInvest = False
 doubleSourcePreempt = True  # Dual sourcing preempts single sourcing
 
@@ -1190,9 +1206,11 @@ eqStrat_matList, eqQuant_matList, Tmat = LthetaEqMatsForPlot(numLpts, LthetaR_ma
                                                              b_0, c_0, cSup_0, lambretlo_0, lambrethi_0, sens_0, fpr_0,
                                                              printUpdates=True, Lr_insp_min=Lr_insp_min,
                                                              Lr_insp_max=Lr_insp_max, Ls_insp_min=Ls_insp_min,
-                                                             Ls_insp_max=Ls_insp_max, Lr_ind_Tmat=4, Ls_ind_Tmat=1,
+                                                             Ls_insp_max=Ls_insp_max, Lr_ind_Tmat=5, Ls_ind_Tmat=0,
                                                              onlyDoubleSource=doubleSource,
                                                              onlyQualInvest=retQualInvest)
+
+AsymLthetaRLB(b_0,cSup_0,lambsuplo_0)
 
 ##############
 ##############
