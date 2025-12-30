@@ -1,7 +1,7 @@
-# Plot generation for "Strategic Role of Inspections in Pharmaceutical Supply Chains"
+# Examining robustness of  for "Strategic Role of Inspections in Pharmaceutical Supply Chains"
 # These functions use the simpler version of the model
 #   - perfect diagnostic, H=1, no retailer quality choice, retailer sources from both suppliers or neither
-# 25-NOV-25
+# 22-DEC-25
 
 import numpy as np
 import matplotlib
