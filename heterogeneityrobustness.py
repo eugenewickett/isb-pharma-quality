@@ -29,6 +29,10 @@ def SPUtil(q1, q2, lambsup1, lambsup2, alph):
     # Social planner's utility
     return q1*(alph+(lambsup1)-1) + q2*(alph+(lambsup2)-1)
 
+def SocWel(uH, uL, q1, q2, cS1, cS2, lambsup1, lambsup2, priceconst=1):
+    # Social welfare
+    return q1*(uH*(lambsup1)+uL*(1-lambsup1)-priceconst*cS1) + q2*(uH*(lambsup2)+uL*(1-lambsup2)-priceconst*cS2)
+
 def SupUtil(q, w, cSup):
     # Returns supplier utility
     return q*(w-cSup)
@@ -84,13 +88,25 @@ def SupPriceLHsqz(scDict, Ctheta):
              np.sqrt((((a - cS2)**2)+4*Ctheta*(-1 + supRateLo))/(-1 + (b**2)))
     return w1, max(w2, 0)
 
+
+def funcLHexpPrice(x, currCtheta, scDict):
+    # When only S2 wants to move off-path; S1 chooses price s.t. S2 is indifferent, S2 chooses FOC
+    b, cS1, cS2, supRateLo, a = scDict['b'], scDict['cSup1'], scDict['cSup2'], scDict['supRateLo'], scDict['a']
+    # x = [w1HHexp, w2HHexp], the on-path HHsqz prices
+    # radterm1 = np.sqrt((((-1 + x[0])**2) + 4*currCtheta*(-1 + supRateLo))/(-1 + (b**2)))
+    # retval1 = (((cS2 - x[1])*(a + b*(-1 + x[0]) - x[1]))/(2*(-1 + (b**2)))) -\
+    #           (0.5*(a +b*(-1 + x[0] + b* radterm1) - radterm1)* radterm1)
+    # retval2 = (x[1]) - 0.5*(a + cS2 + b*(-1 + x[0]))
+    radterm1 = np.sqrt((((-1 + x[0])**2) + 4*currCtheta*(-1 + (supRateLo**2)))/(-1 + (b**2)))
+    retval1 = ((cS2 - x[1])*(a + b*(-1 + x[0]) - x[1]))/(2*(-1 + (b**2))) -\
+                (0.5*radterm1*(a - radterm1 + b*(-1 + x[0] + b* radterm1)))
+    retval2 = x[1] - (0.5*(a + cS2 + b*(-1 + x[0])))
+    return [retval1, retval2]
 def SupPriceLHexp(scDict, Ctheta):
     # Returns on-path LHexp prices
-    b, cS1, cS2, supRateLo, a = scDict['b'], scDict['cSup1'], scDict['cSup2'], scDict['supRateLo'], scDict['a']
-    radterm = np.sqrt((-1 + (b**2))*((a**2) - 4*(-4+3*(b**2))*Ctheta*(-1+ (supRateLo**2))))
-    w1 = max(0, (-4 + a*b + 3*(b**2)+2*radterm)/(-4+3*(b**2)))
-    w2 = max(0, (-4*(a + cS2) + (b**2)*(4*a + 3*cS2) +2*b*radterm)/(-8 +6*(b**2)))
-    return w1, w2
+    xinit = SupPriceLHFOC(scDict, 0)
+    root = fsolve(funcLHexpPrice, [xinit[0], xinit[1]], args=(Ctheta, scDict))
+    return root[0], root[1]
 
 def funcHHexpPrice(x, currCtheta, scDict):
     b, cS1, cS2, supRateLo, a = scDict['b'], scDict['cSup1'], scDict['cSup2'], scDict['supRateLo'], scDict['a']
@@ -104,8 +120,7 @@ def funcHHexpPrice(x, currCtheta, scDict):
               (0.5*(a + b*(-1 + x[0] + b*radterm2) - radterm2)*radterm2)
     return [retval1, retval2]
 
-# TODO: CONFIRM WITH PARSHURAM
-def funcHHexpPrice2(x, currCtheta, scDict):
+def funcHHexpPrice1(x, currCtheta, scDict):
     # When only S1 wants to move off-path; S2 chooses price s.t. S1 is indifferent, S1 chooses FOC
     b, cS1, cS2, supRateLo, a = scDict['b'], scDict['cSup1'], scDict['cSup2'], scDict['supRateLo'], scDict['a']
     # x = [w1HHexp, w2HHexp], the on-path HHsqz prices
@@ -115,25 +130,121 @@ def funcHHexpPrice2(x, currCtheta, scDict):
         (0.5*(1 +b*(-a + x[1] +b*radterm2) - radterm2) *radterm2)
     return [retval1, retval2]
 
-def SupPriceHHexp(scDict, Ctheta):
+def funcHHexpPrice2(x, currCtheta, scDict):
+    # When only S2 wants to move off-path; S1 chooses price s.t. S2 is indifferent, S2 chooses FOC
+    b, cS1, cS2, supRateLo, a = scDict['b'], scDict['cSup1'], scDict['cSup2'], scDict['supRateLo'], scDict['a']
+    # x = [w1HHexp, w2HHexp], the on-path HHsqz prices
+    radterm1 = np.sqrt((((-1 + x[0])**2) + 4*currCtheta*(-1 + supRateLo))/(-1 + (b**2)))
+    retval1 = (((cS2 - x[1])*(a + b*(-1 + x[0]) - x[1]))/(2*(-1 + (b**2)))) -\
+              (0.5*(a +b*(-1 + x[0] + b* radterm1) - radterm1)* radterm1)
+    retval2 = (x[1]) - 0.5*(a + cS2 + b*(-1 + x[0]))
+    return [retval1, retval2]
+
+def SupPriceHHexp(scDict, Ctheta, tol=1E-8):
     # Returns on-path HHexp prices
     xinit = SupPriceHH(scDict, 0)
-    root = fsolve(funcHHexpPrice, [xinit[0], xinit[1]], args=(Ctheta, scDict))
+    root, infodict, _, _ = fsolve(funcHHexpPrice, [xinit[0], xinit[1]], args=(Ctheta, scDict), full_output=True)
+    if np.sum(np.abs(infodict['fvec'])) > tol:
+        root= [-1, -1]
+    return root[0], root[1]
+
+def SupPriceHHexp1(scDict, Ctheta):
+    # Returns on-path HHexp prices; S1 wants to move but not S2
+    xinit = SupPriceHH(scDict, 0)
+    root = fsolve(funcHHexpPrice1, [xinit[0], xinit[1]], args=(Ctheta, scDict))
     return root[0], root[1]
 
 def SupPriceHHexp2(scDict, Ctheta):
-    # Returns on-path HHexp prices
+    # Returns on-path HHexp prices; S1 wants to move but not S2
     xinit = SupPriceHH(scDict, 0)
     root = fsolve(funcHHexpPrice2, [xinit[0], xinit[1]], args=(Ctheta, scDict))
     return root[0], root[1]
-
 
 def SupPriceLLsqz(scDict, Ctheta):
     # Returns on-path LLsqz prices
     b, cS1, cS2, supRateLo, a = scDict['b'], scDict['cSup1'], scDict['cSup2'], scDict['supRateLo'], scDict['a']
     w1 = 1-(2*np.sqrt((1+(a**2)-2*a*b)*(-1+(b**2))*Ctheta*(-1+(supRateLo**2))))/(1+(a**2)-2*a*b)
     w2 = a-(2*a*np.sqrt((1+(a**2)-2*a*b)*(-1+(b**2))*Ctheta*(-1 + (supRateLo**2))))/(1+(a**2)-2*a*b)
-    return max(w1,0), max(w2,0)
+    return max(w1, 0), max(w2, 0)
+
+def funcLLsqzPrice2(x, currCtheta, scDict):
+    # Lagrangian using LLFOC utility ratios in objective
+    b, cS1, cS2, supRateLo, a = scDict['b'], scDict['cSup1'], scDict['cSup2'], scDict['supRateLo'], scDict['a']
+    # x = [w1LLsqz, w2LLsqz, lambLLsqz], the on-path HHsqz prices
+    retval1 = (4 - 4*(b**2) + (b**4) - 8*x[0] + 8* (b**2)*x[0] - 2* (b**4)* x[0] + 4*b* x[1] - 3*(b**3)*x[1] +\
+               (b**5)*x[1] + a*b*(-2 + (b**2))*(4 + 2*x[0]* (-2 + x[2]) - 2* b* x[1]* (-2 + x[2]) +\
+              (b**2)* (-1 + x[2]) - 4* x[2]) +(a**3)* (b**3)* (-1 + x[2]) - ((-2 + (b**2))**2)*(1 - x[0] + b*x[1])*x[2]+\
+              (a**2)*b*(4*x[1] + b* (5 - 2*x[0] + (b**3)* x[1] + 2* (b**2)* (-1 + x[2]) + (-5 + x[0])* x[2] -\
+              b* x[1]*(3 + x[2]))))  # Derivative WRT w1
+    retval2 = (b*(-4* x[0] + b* (b + 3* b* x[0] - (b**3)* x[0] + 2* x[1])) + a*b*(-8*x[1] + b*(-5 + 8* x[0] +\
+              2*b*(b - 2* b* x[0] + 2* x[1]))) + ((-2 + (b**2))**2)*(b* (-1 + x[0]) - x[1])*x[2] +\
+              a*(-2 + (b**2))* (-2 + (b**2)* (-1 + 2*x[0]) - 2* b* x[1])* x[2] + (a**3)*(-4 - (b**4) +\
+              (b**2)* (4 + x[2])) + (a**2)*(-1*(b**5)*(-1 + x[0]) + 8*x[1] + 2* (b**4)* x[1] -\
+              (b**2)* x[1] *(8 + x[2]) - 4* b *(-2 + x[0] + x[2]) + (b**3)*(-6 + x[2] + x[0]* (3 + x[2]))))  # Derivative WRT w2
+    retval3 = (a**2) + 2* a* b* (-1 + x[0]) + ((-1 + x[0])**2) - 2*a *x[1] - 2* b* (-1 + x[0]) *x[1] + (x[1]**2) -\
+              4*(-1 + (b**2))* currCtheta *(-1 + (supRateLo**2))
+    return [retval1, retval2, retval3]
+
+def SupPriceLLsqz2(scDict, Ctheta):  # USING RATIO OF LL UTILS DOESNT WORK
+    # Returns on-path LLsqz prices
+    xinit = SupPriceLL(scDict, 0)
+    root = fsolve(funcLLsqzPrice2, [xinit[0], xinit[1], 1], args=(Ctheta, scDict))
+    return root[0], root[1]
+
+def funcLLsqzPrice3(x, currCtheta, scDict):
+    # Lagrangian using 'a' as ratio in objective
+    b, cS1, cS2, supRateLo, a = scDict['b'], scDict['cSup1'], scDict['cSup2'], scDict['supRateLo'], scDict['a']
+    # x = [w1LLsqz, w2LLsqz, lambLLsqz], the on-path HHsqz prices
+    retval1 = x[0]* (-2 + x[2]) - (1 + b* x[1])* (-1 + x[2]) + a* b* (-1 + x[1] + x[2])  # Derivative WRT w1
+    retval2 = (a**2) + a* (b *(-1 + x[0]) - 2* x[1] - x[2]) + x[1]* x[2] + b* (x[0] + x[2] - x[0]* x[2]) # Derivative WRT w2
+    retval3 = (a**2) + 2*a*b* (-1 + x[0]) + ((-1 + x[0])**2) - 2*a*x[1] - 2*b*(-1 + x[0])* x[1] +\
+              (x[1]**2) - 4* (-1 + (b**2))*currCtheta* (-1 + (supRateLo**2))  # Derivative WRT lambda
+    return [retval1, retval2, retval3]
+
+def SupPriceLLsqz3(scDict, Ctheta):
+    # Returns on-path LLsqz prices
+    xinit = SupPriceLL(scDict, 0)
+    root = fsolve(funcLLsqzPrice3, [xinit[0], xinit[1], 1], args=(Ctheta, scDict))
+    return root[0], root[1]
+
+def funcLLsqzPrice4(x, currCtheta, scDict):
+    # Lagrangian using 'a' as ratio in objective
+    b, cS1, cS2, supRateLo, a = scDict['b'], scDict['cSup1'], scDict['cSup2'], scDict['supRateLo'], scDict['a']
+    # x = [w1LLsqz, w2LLsqz, lambLLsqz], the on-path HHsqz prices
+    retval1 = (a**2)* b + b* x[1] *(-1 + x[2]) + x[2] - x[0]*x[2] + a* (-1 + 2* x[0] - b* (x[1] + x[2]))  # Derivative WRT w1
+    retval2 = -1*x[1]* (-2 + x[2]) + b* (-1 + x[0])* (-1 + x[2]) + a* (-1 - b* x[0] + x[2]) # Derivative WRT w2
+    retval3 = (a**2) + 2*a*b*(-1 + x[0]) + ((-1 + x[0])**2) - 2*a*x[1] - 2*b*(-1 + x[0])*x[1] + (x[1]**2) -\
+              4*(-1 + (b**2))*currCtheta*(-1 + (supRateLo**2))  # Derivative WRT lambda
+    return [retval1, retval2, retval3]
+
+def SupPriceLLsqz4(scDict, Ctheta):
+    # Returns on-path LLsqz prices
+    xinit = SupPriceLL(scDict, 0)
+    root = fsolve(funcLLsqzPrice4, [xinit[0], xinit[1], 1], args=(Ctheta, scDict))
+    return root[0], root[1]
+
+def funcLLsqzPrice5(x, currCtheta, scDict):
+    # Lagrangian using 'a' as ratio in objective
+    b, cS1, cS2, supRateLo, a = scDict['b'], scDict['cSup1'], scDict['cSup2'], scDict['supRateLo'], scDict['a']
+    # x = [w1LLsqz, w2LLsqz, lambLLsqz], the on-path HHsqz prices
+    retval1 = (-b*(4*x[1] + b*(1 - 2*x[0] + b* (-3 + (b**2))* x[1])) + ((-2 + (b**2))**2)*(1-x[0]+b*x[1])*x[2] +\
+              a* b* (4 - (b**2) - 8*x[0] + 4* (b**2)*x[0] + 8*b*x[1]-4* (b**3)*x[1]-(-2 + (b**2))*(-4 + (b**2) +\
+              2*x[0] - 2*b*x[1])*x[2]) + (a**3)*b*(4 + (b**4) - (b**2)*(4 + x[2])) + (a**2)*(-4 + 8*x[0]+b*(-4*x[1] +\
+              b* (-1*(b**3)*x[1] + (b**2)*(1 + 2*x[0] - 2*x[2]) + 5* x[2]+b*x[1]*(3 +x[2]) - x[0]*(8 + x[2])))))  # Derivative WRT w1
+    retval2 = (8*x[1] + b*(4 - 4*x[0] + b* (-8* x[1] + b* (-4 + 3*x[0] + b* (b - b* x[0] + 2* x[1])))) +\
+                (a**3)* (b**2)* (-1 + x[2]) + ((-2 + (b**2))**2)* (b*(-1 + x[0]) - x[1])*x[2] +\
+                a* (-2 + (b**2))* (2 - 2* x[2] + b* (b + 2* b* x[0]* (-2 + x[2]) - 2* x[1]* (-2 + x[2]) -\
+                b* x[2])) - (a**2)* b* ((b**4)* x[0] + b* x[1]* (-2 + x[2]) + 4* (-1 + x[0] + x[2]) -\
+                (b**2)* (-1 + x[2] + x[0]* (3 + x[2])))) # Derivative WRT w2
+    retval3 = (a**2) + 2*a*b*(-1 + x[0]) + ((-1 + x[0])**2) - 2*a*x[1] - 2*b*(-1 + x[0])*x[1] + (x[1]**2) -\
+              4*(-1 + (b**2))*currCtheta*(-1 + (supRateLo**2))  # Derivative WRT lambda
+    return [retval1, retval2, retval3]
+
+def SupPriceLLsqz5(scDict, Ctheta):
+    # Returns on-path LLsqz prices
+    xinit = SupPriceLL(scDict, 0)
+    root = fsolve(funcLLsqzPrice5, [xinit[0], xinit[1], 1], args=(Ctheta, scDict))
+    return root[0], root[1]
 
 def CthetaLLFOCUB(scDict):
     # LL FOC UB in Ctheta
@@ -148,26 +259,43 @@ def CthetaLHFOCUB(scDict):
                         (b**2))*(-1+supRateLo)))
     return retval
 
-def CthetaLHFOCLB(scDict):
+def CthetaLHFOCLB(scDict, step=1/10000):
     # LH FOC LB in Ctheta
     b, cS1, cS2, supRateLo, a = scDict['b'], scDict['cSup1'], scDict['cSup2'], scDict['supRateLo'], scDict['a']
-    retval = (1/(144*((-1+(supRateLo**2))**2)))*(-((6*((1+a-cS2)**2)*(-1+(supRateLo**2)))/((-2+b)**2))-\
-              (6*((1-a+cS2)**2)*(-1+(supRateLo**2)))/((2+b)**2)-(2*(-1+a-cS2)*(-1+a+5*cS2)*(-1+(supRateLo**2)))/(2+\
-              b)+(2*(1+a-cS2)*(1+a+5*cS2)*(-1+(supRateLo**2)))/(-2+b)+((-2*((1+a)**2)-8*(1+a)*cS2+(cS2**2))*(-1+\
-              (supRateLo**2)))/(1+b) +((2 + 2*(a**2) - cS2*(8+cS2)+ a*(-4 + 8*cS2))*(-1+ (supRateLo**2)))/(-1+b)+\
-              18*np.sqrt(-((cS2*(-4*a*(-2+ (b**2)) + 3*(b**2)*cS2- 4*(b + cS2))*((-2*a*(-2+ (b**2))+b*(-2+\
-              b*cS2))**2)*((-1 + (supRateLo**2))**2))/(((-4+(b**2))**3)*((-1+(b**2))**2)))))
-    return retval
+    w1on, w2on = SupPriceLHFOC(scDict, 0)
+    LHFOCUB = CthetaLHFOCUB(scDict)
+    # Find Ctheta where off-path retIR price is preferred by S2
+    s2utilOn = SupUtil(q2Opt(w1on, w2on, b, a), w2on, cS2)
+    CthetaVec = np.arange(LHFOCUB, 0, -1 * step)
+    currLB = CthetaVec[0]  # Move down from this
+    found = False
+    for Cthetaind, currCtheta in enumerate(CthetaVec):
+        if not found:
+            # Get off-path price
+            radterm = np.sqrt((4 - 64*currCtheta +b*((a - cS2)*(4 + a*b - b*cS2) - 4*b*(-8 + (b**2))* currCtheta) +\
+                      4*((-4 + (b**2))**2)* currCtheta* (supRateLo**2))/(((-4 + (b**2))**2)*(-1 +(b**2))))
+            w2LHFOCoff = (2*a*(-2 + (b**2)) + 4*radterm + b*(2 - b*cS2 + b*(-5 + (b**2))* radterm))/(-4 + (b**2))
+            s2utilOff = SupUtil(q2Opt(w1on, w2LHFOCoff, b, a), w2LHFOCoff, 0)
+            if s2utilOff > s2utilOn:
+                found = True
+            if not found:
+                currLB = currCtheta
+    # retval = (1/(144*((-1+(supRateLo**2))**2)))*(-((6*((1+a-cS2)**2)*(-1+(supRateLo**2)))/((-2+b)**2))-\
+    #           (6*((1-a+cS2)**2)*(-1+(supRateLo**2)))/((2+b)**2)-(2*(-1+a-cS2)*(-1+a+5*cS2)*(-1+(supRateLo**2)))/(2+\
+    #           b)+(2*(1+a-cS2)*(1+a+5*cS2)*(-1+(supRateLo**2)))/(-2+b)+((-2*((1+a)**2)-8*(1+a)*cS2+(cS2**2))*(-1+\
+    #           (supRateLo**2)))/(1+b) +((2 + 2*(a**2) - cS2*(8+cS2)+ a*(-4 + 8*cS2))*(-1+ (supRateLo**2)))/(-1+b)+\
+    #           18*np.sqrt(-((cS2*(-4*a*(-2+ (b**2)) + 3*(b**2)*cS2- 4*(b + cS2))*((-2*a*(-2+ (b**2))+b*(-2+\
+    #           b*cS2))**2)*((-1 + (supRateLo**2))**2))/(((-4+(b**2))**3)*((-1+(b**2))**2)))))
+    return currLB
 
-# TODO: FIX ONCE PRICES ARE FIXED AND UPDATED
-def CthetaLHexpLB(scDict, step=1/1000):
+def CthetaLHexpLB(scDict, step=1/10000):
     # LH exp LB in Ctheta
     b, cS1, cS2, supRateLo, a = scDict['b'], scDict['cSup1'], scDict['cSup2'], scDict['supRateLo'], scDict['a']
     # We do three checks under each set of prices for given Ctheta: retailer IR, S2's off-path, S1's LL on-path
     LHFOCLB, LLFOCUB = CthetaLHFOCLB(scDict), CthetaLLFOCUB(scDict)
     w1LLFOC, w2LLFOC = SupPriceLL(scDict, 0)  # LL on-path prices/utility
     S1utilLLFOC = SupUtil(q1Opt(w1LLFOC,w2LLFOC,b,a),w1LLFOC,0)
-    S2utilLLFOC = SupUtil(q2Opt(w1LLFOC,w2LLFOC,b,a), w2LLFOC,0)
+    # S2utilLLFOC = SupUtil(q2Opt(w1LLFOC,w2LLFOC,b,a), w2LLFOC,0)
     CthetaVec = np.arange(LHFOCLB, 0, -1 * step)
     currLB = CthetaVec[0]  # Move down from this
     found = False
@@ -185,18 +313,12 @@ def CthetaLHexpLB(scDict, step=1/1000):
                 found = True
             if currCtheta > LLFOCUB and currS1util < currS1utilLLsqz:  # Compare with LLsqz
                 found = True
-            # Check S2 off-path utility
-            radterm = np.sqrt((((-1 + w1on)**2) + 4*currCtheta*(-1 + (supRateLo**2)))/(-1 + (b**2)))
-            w2off = a - radterm + b*(-1 + w1on + b*radterm)
-            currS2utilOff = SupUtil(q2Opt(w1on, w2off, b, a),w2off,0)
-            if currS2util < currS2utilOff:
-                found = True
-            # Update currLB if made it through all 3 checks
+            # Update currLB if made it through checks
             if not found:
                 currLB = currCtheta
     return currLB
 
-def CthetaHHFOCLB(scDict, step=1/1000, UBstart=10):
+def CthetaHHFOCLB(scDict, step=1/10000, UBstart=10):
     # HH FOC LB in Ctheta
     b, cS1, cS2, supRateLo, a = scDict['b'], scDict['cSup1'], scDict['cSup2'], scDict['supRateLo'], scDict['a']
     w1on, w2on = SupPriceHH(scDict, 0)
@@ -214,17 +336,19 @@ def CthetaHHFOCLB(scDict, step=1/1000, UBstart=10):
             s1utilOff, s2utilOff = SupUtil(q1Opt(w1off, w2on, b, a), w1off, 0), SupUtil(q2Opt(w1on,w2off,b,a),w2off, 0)
             if s1utilOff > s1utilOn:
                 found = True
-            if s2utilOff > s2utilOff:
+                devSup = 1
+            if s2utilOff > s2utilOn:
                 found = True
+                devSup = 2
             if not found:
                 currLB = currCtheta
-    return currLB
+    return currLB, devSup
 
 def CthetaLHsqzUB(scDict, step=1/1000, UBmax=10):
     # LH sqz UB in Ctheta
     b, cS1, cS2, supRateLo, a = scDict['b'], scDict['cSup1'], scDict['cSup2'], scDict['supRateLo'], scDict['a']
     # We do three checks under each set of prices for given Ctheta: retailer IR, S2's off-path, S1's LL on-path
-    LHFOCUB, HHFOCLB = CthetaLHFOCUB(scDict), CthetaHHFOCLB(scDict)
+    LHFOCUB, HHFOCLB = CthetaLHFOCUB(scDict), CthetaHHFOCLB(scDict)[0]
     w1HH, w2HH = SupPriceHH(scDict, 0)
     S1utilHH = SupUtil(q1Opt(w1HH, w2HH, b, a), w1HH, cS1)
     CthetaVec = np.arange(LHFOCUB, UBmax, step)
@@ -233,7 +357,7 @@ def CthetaLHsqzUB(scDict, step=1/1000, UBmax=10):
     for Cthetaind, currCtheta in enumerate(CthetaVec):
         if not found:
             w1on, w2on = SupPriceLHsqz(scDict, currCtheta)
-            currS1util, currS2util = SupUtil(q1Opt(w1on,w2on,b, a), w1on, 0), SupUtil(q2Opt(w1on,w2on,b, a), w2on, cS2)
+            currS1util = SupUtil(q1Opt(w1on,w2on,b, a), w1on, 0)
             # Check S1 price
             if w1on < 0:
                 found = True
@@ -245,37 +369,48 @@ def CthetaLHsqzUB(scDict, step=1/1000, UBmax=10):
                 currLB = currCtheta
     return currLB
 
-def CthetaHHexp2LB(scDict, step=1/1000):
-    # HH exp2 LB in Ctheta
+def CthetaHHexpAdjLB(scDict, step=1/10000):
+    # HH exp adj LB in Ctheta; first checks which supplier wants to move in decreasing Ctheta
     b, cS1, cS2, supRateLo, a = scDict['b'], scDict['cSup1'], scDict['cSup2'], scDict['supRateLo'], scDict['a']
     # We do three checks under each set of prices for given Ctheta: retailer IR, S2's off-path, S1's LL on-path
-    HHFOCLB = CthetaHHFOCLB(scDict)
-    w1HH, w2HH = SupPriceHH(scDict, 0)
-    # S1utilHH = SupUtil(q1Opt(w1HH, w2HH, b, a), w1HH, cS1)
+    HHFOCLB, devS = CthetaHHFOCLB(scDict)
     CthetaVec = np.arange(HHFOCLB, 0, -1*step)
     currLB = CthetaVec[0]  # Move down from this
     found = False
     for Cthetaind, currCtheta in enumerate(CthetaVec):
         if not found:
-            w1on, w2on = SupPriceHHexp2(scDict, currCtheta)
+            if devS==1:
+                w1on, w2on = SupPriceHHexp1(scDict, currCtheta)
+            elif devS==2:
+                w1on, w2on = SupPriceHHexp2(scDict, currCtheta)
+            else:
+                print('No deviating supplier identified')
+                return -1
             currS1util, currS2util = SupUtil(q1Opt(w1on,w2on,b,a),w1on,cS1), SupUtil(q2Opt(w1on,w2on,b, a), w2on, cS2)
-            # Check against S2 off-path
-            if currS2util < 0:
-                found = True
+            # Check against off-path for non-deviating supplier
+            if devS==1:
+                w2offRad = np.sqrt((((-1 + w1on) ** 2) + 4 * currCtheta * (-1 + supRateLo)) / (-1 + (b ** 2)))
+                w2off = a + b * (-1 + w1on + b * w2offRad) - w2offRad
+                s2utilOff = SupUtil(q2Opt(w1on, w2off, b, a), w2off, 0)
+                if s2utilOff > currS2util:
+                    found = True
+            elif devS==2:
+                w1offRad = np.sqrt((((a - w2on)**2)+4*currCtheta*(-1 + supRateLo)) / (-1 + (b**2)))
+                w1off = 1 + b*(-1*a + w2on + b*w1offRad) - w1offRad
+                s1utilOff = SupUtil(q1Opt(w1off, w2on, b, a), w1off, 0)
+                if s1utilOff > currS1util:
+                    found = True
             # Update currLB if made it through checks
             if not found:
                 currLB = currCtheta
     return currLB
 
-# TODO: REDO WITH EXP2 INCLUDED
-def CthetaHHexpLB(scDict, step=1/1000):
+def CthetaHHexpLB(scDict, step=1/10000):
     # HH exp LB in Ctheta
     b, cS1, cS2, supRateLo, a = scDict['b'], scDict['cSup1'], scDict['cSup2'], scDict['supRateLo'], scDict['a']
     # We do three checks under each set of prices for given Ctheta: retailer IR, S2's off-path, S1's LL on-path
-    HHFOCLB = CthetaHHFOCLB(scDict)
-    w1HH, w2HH = SupPriceHH(scDict, 0)
-    # S1utilHH = SupUtil(q1Opt(w1HH, w2HH, b, a), w1HH, cS1)
-    CthetaVec = np.arange(HHFOCLB, 0, -1*step)
+    HHexpAdjLB = CthetaHHexpAdjLB(scDict)
+    CthetaVec = np.arange(HHexpAdjLB, 0, -1*step)
     currLB = CthetaVec[0]  # Move down from this
     found = False
     for Cthetaind, currCtheta in enumerate(CthetaVec):
@@ -290,143 +425,157 @@ def CthetaHHexpLB(scDict, step=1/1000):
                 currLB = currCtheta
     return currLB
 
+def CthetaLLsqzUB(scDict, step=1/10000, UBmax=10):
+    # LL sqz UB in Ctheta
+    b, cS1, cS2, supRateLo, a = scDict['b'], scDict['cSup1'], scDict['cSup2'], scDict['supRateLo'], scDict['a']
+    # We do three checks under each set of prices for given Ctheta: retailer IR, S2's off-path, S1's LL on-path
+    LLFOCUB = CthetaLLFOCUB(scDict)
+    CthetaVec = np.arange(LLFOCUB, UBmax, step)
+    currLB = CthetaVec[0]  # Move up from this
+    found = False
+    for Cthetaind, currCtheta in enumerate(CthetaVec):
+        if not found:
+            w1on, w2on = SupPriceLLsqz5(scDict, currCtheta)
+            currS1util, currS2util = SupUtil(q1Opt(w1on, w2on, b, a),w1on,0), SupUtil(q2Opt(w1on,w2on,b, a), w2on, 0)
+            # Get off-path prices
+            w1off, w2off  = 0.5*(1 - a* b + cS1 + b* w2on), 0.5*(a + cS2 + b*(-1 + w1on))
+            offS1util = SupUtil(q1Opt(w1off, w2on, b, a), w1off, cS1)
+            offS2util = SupUtil(q2Opt(w1on, w2off, b, a), w2off, cS2)
+            if currS1util < offS1util:
+                found = True
+            if currS2util < offS2util:
+                found = True
+            # Update currLB if made it through checks
+            if not found:
+                currLB = currCtheta
+    return currLB
 
+def LthetaCsupEqMatsForPlot(numpts, Ctheta_max, cSupDelta_max, scDict):
+    # Generate list of equilibria matrices for plotting
+    # cSupDelta ranges from 0 to cSupDelta_max, and denotes cSup2-cSup1
+    CthetaVec = np.arange(0, Ctheta_max, (Ctheta_max)/numpts)
+    cSupVec = np.arange(0.01, cSupDelta_max, cSupDelta_max/numpts)
 
-# def LthetaEqMatsForPlot(numpts, Ctheta_max, cSup_max, scDict):
-#     # Generate list of equilibria matrices for plotting
-#     CthetaVec = np.arange(0, Ctheta_max, (Ctheta_max)/numpts)
-#     cSupVec = np.arange(0.01, cSup_max, cSup_max/numpts)
-#
-#     eq_list = ['LL', 'LLsqz', 'LHexp', 'LHFOC', 'LHsqz', 'HHsqz', 'HH', 'N']
-#     eqStrat_matList = np.zeros((len(eq_list), cSupVec.shape[0], CthetaVec.shape[0]))
-#     eqStrat_matList[:] = np.nan
-#
-#     for currcSupind in range(cSupVec.shape[0]):
-#         currdict = scDict.copy()
-#         currdict['cSup'] = cSupVec[currcSupind]
-#         # Get bounds under current cSup
-#         CthLLUB, CthHHLB, CthHHsqzLB = CthetaLLUB(currdict), CthetaHHLB(currdict), CthetaHHsqzLB(currdict)
-#         CthLHFOCLB, CthLHexpLB, CthLHFOCUB = CthetaLHFOCLB(currdict), CthetaLHexpIRLB(currdict), CthetaLHFOCUB(currdict)
-#         (CthLHsqzUB, _), CthLHsqztwoUB  = CthetaLHsqzUB(currdict), CthetaLHsqztwoUB(currdict)
-#         CthLLsqzUB = CthetaLLsqzUB(scDict)
-#         # Place "1" where present for each respective equilibrium
-#         eqStrat_matList[0, currcSupind, np.where(CthetaVec < CthLLUB)] = 1  # LL
-#         eqStrat_matList[1, currcSupind, np.where((CthetaVec > CthLLUB) & (CthetaVec <= CthLLsqzUB))] = 1  # LLsqz
-#         eqStrat_matList[2, currcSupind, np.where((CthetaVec >= CthLHexpLB) & (CthetaVec < CthLHFOCLB))] = 1  # LHexp
-#         eqStrat_matList[3, currcSupind, np.where((CthetaVec >= CthLHFOCLB) & (CthetaVec <= CthLHFOCUB))] = 1  # LHFOC
-#         eqStrat_matList[4, currcSupind, np.where((CthetaVec > CthLHFOCUB) &
-#                                                  ((CthetaVec < CthLHsqzUB) | (CthetaVec < CthLHsqztwoUB)))] = 1  # LHsqz
-#         eqStrat_matList[5, currcSupind, np.where((CthetaVec >= CthHHsqzLB) & (CthetaVec < CthHHLB))] = 1  # HHsqz
-#         eqStrat_matList[6, currcSupind, np.where(CthetaVec >= CthHHLB)] = 1  # HH
-#     # Identify any excessively large cSup
-#     # cSupCond = cSupBar(scDict['b'])
-#     # eqStrat_matList[7, np.where(cSupVec > cSupCond), :] = 1
-#
-#     return eqStrat_matList
-#
-# def SPfrictThresh(scDict):
-#     # Returns the SP friction (alpha) threshold, for which LH-sqz is preferred
-#     #   for higher alpha values and HH is preferred otherwise
-#     b, cS, rateLo = scDict['b'], scDict['cSup'], scDict['supRateLo']
-#     retval = -(((-2+b)*(1+b)*(b*(2-2* cS+b *np.sqrt((4 *((2+b)**2))/((2+b-(b**2))**2)+1/(((4-5*(b**2)+(b**4))**2)*(-1+\
-#              rateLo))*(-4*(-1+b)*((2+b)**2)*(8+b*(-4+b*(-6+5*b)))*cS*(-1+rateLo)+(-64+\
-#              b*(64+b*(80+b*(-64+b*(-28+b*(12+7*b))))))*(cS**2)*(-1+rateLo)-4*((-4+(b**2))**2)*(4-7*(b**2)+\
-#              3*(b**4))*np.sqrt(-1*((cS*((-2+b+(b**2)-b*cS)**2)*(8-4*b*(1+b)-4*cS+b*(4+b)*cS)*((-1+rateLo)**2))/(((-4+\
-#              (b**2))**3)*((-1+(b**2))**2)))))))-2*np.sqrt((4*((2+b)**2))/((2+b-(b**2))**2)+1/(((4-5*(b**2)+\
-#              (b**4))**2)*(-1+rateLo))*(-4*(-1+b)*((2+b)**2)*(8+b*(-4+b*(-6+5*b)))*cS*(-1+rateLo)+(-64+\
-#              b*(64+b*(80+b*(-64+b*(-28+b*(12+7*b))))))*(cS**2)*(-1+rateLo)-4*((-4+(b**2))**2)*(4-7*(b**2)+\
-#              3*(b**4))* np.sqrt(-1*((cS*((-2+b+(b**2)-b*cS)**2)*(8-4*b*(1+b)-4*cS+b*(4+b)*cS)*((-1+rateLo)**2))/(((-4+\
-#              (b**2))**3)*((-1+(b**2))**2)))))))*(-1+rateLo))/((-2+b+(b**2))*(-2*(-2+2*cS+np.sqrt((4*((2+b)**2))/((2+b-\
-#              (b**2))**2)+1/(((4-5*(b**2)+(b**4))**2)*(-1+rateLo))*(-4*(-1+b)*((2+b)**2)*(8+b*(-4+b*(-6+5*b)))*cS*(-1+\
-#              rateLo)+(-64+b*(64+b*(80+b*(-64+b*(-28+b*(12+7*b))))))*(cS**2)*(-1+rateLo)-4*((-4+\
-#              (b**2))**2)*(4-7*(b**2)+3*(b**4))*np.sqrt(-1*((cS*((-2+b+(b**2)-b*cS)**2)*(8-4*b*(1+b)-4*cS+b*(4+\
-#              b)*cS)*((-1+rateLo)**2))/(((-4+(b**2))**3)*((-1+(b**2))**2)))))))+b*(2-2*cS-np.sqrt((4*((2+b)**2))/((2+\
-#              b-(b**2))**2)+1/(((4-5*(b**2)+(b**4))**2)*(-1+rateLo))*(-4*(-1+b)*((2+b)**2)*(8+b*(-4+b*(-6+5*b)))*cS*(-1+\
-#              rateLo)+(-64+b*(64+b*(80+b*(-64+b*(-28+b*(12+7*b))))))*(cS**2)*(-1+rateLo)-4*((-4+(b**2))**2)*(4-7*(b**2)+\
-#              3*(b**4))*np.sqrt(-1*((cS*((-2+b+(b**2)-b*cS)**2)*(8-4*b*(1+b)-4*cS+b*(4+b)*cS)*((-1+rateLo)**2))/(((-4+\
-#              (b**2))**3)*((-1+(b**2))**2))))))+b*np.sqrt((4*((2+b)**2))/((2+b-(b**2))**2)+1/(((4-5*(b**2)+\
-#              (b**4))**2)*(-1+rateLo))*(-4*(-1+b)*((2+b)**2)*(8+b*(-4+b*(-6+5*b)))*cS*(-1+rateLo)+(-64+b*(64+b*(80+\
-#              b*(-64+b*(-28+b*(12+7*b))))))*(cS**2)*(-1+rateLo)-4*((-4+(b**2))**2)*(4-7*(b**2)+\
-#              3*(b**4))*np.sqrt(-1*((cS*((-2+b+(b**2)-b*cS)**2)*(8-4*b*(1+b)-4*cS+b*(4+b)*cS)*((-1+rateLo)**2))/(((-4+\
-#              (b**2))**3)*((-1+(b**2))**2))))))))))
-#     return retval
-#
-# def SPfrictThreshHHsqz(scDict):
-#     # Returns the SP friction (alpha) threshold, for which LH-sqz is preferred
-#     #   for higher alpha values and HHsqz is preferred otherwise
-#     b, cS, rateLo = scDict['b'], scDict['cSup'], scDict['supRateLo']
-#     retval = ((1-b+b*cS)*(-1+rateLo))/((-1+b)*cS)
-#     return retval
+    eq_list = ['LL', 'LLsqz', 'LHexp', 'LHFOC', 'LHsqz', 'HHsqz', 'HH']
+    eqStrat_matList = np.zeros((len(eq_list), cSupVec.shape[0], CthetaVec.shape[0]))
+    eqStrat_matList[:] = np.nan
 
+    for currcSupind in range(cSupVec.shape[0]):
+        currdict = scDict.copy()
+        currdict['cSup1'] = scDict['cSup2'] + cSupVec[currcSupind]
+        # Get bounds under current cSup
+        CthLLUB, CthLHFOCLB, CthLLsqzUB = CthetaLLFOCUB(currdict), CthetaLHFOCLB(currdict), CthetaLLsqzUB(currdict)
+        CthHHLB, devS = CthetaHHFOCLB(currdict)
+        CthLHFOCUB, CthLHsqzUB, CthLHexpLB = CthetaLHFOCUB(currdict), CthetaLHsqzUB(currdict), CthetaLHexpLB(currdict)
+        CthHHexpAdjLB, CthHHexpLB = CthetaHHexpAdjLB(currdict), CthetaHHexpLB(currdict)
+        eqStrat_matList[0, currcSupind, np.where(CthetaVec < CthLLUB)] = 1  # LL
+        eqStrat_matList[1, currcSupind, np.where((CthetaVec > CthLLUB) & (CthetaVec <= CthLLsqzUB))] = 1  # LLsqz
+        eqStrat_matList[2, currcSupind, np.where((CthetaVec >= CthLHexpLB) & (CthetaVec < CthLHFOCLB))] = 1  # LHexp
+        eqStrat_matList[3, currcSupind, np.where((CthetaVec >= CthLHFOCLB) & (CthetaVec <= CthLHFOCUB))] = 1  # LHFOC
+        eqStrat_matList[4, currcSupind, np.where((CthetaVec > CthLHFOCUB) & (CthetaVec < CthLHsqzUB))] = 1  # LHsqz
+        eqStrat_matList[5, currcSupind, np.where((CthetaVec >= CthHHexpLB) & (CthetaVec < CthHHLB))] = 1  # HHsqz
+        eqStrat_matList[6, currcSupind, np.where(CthetaVec >= CthHHLB)] = 1  # HH
 
-b, cSup1, cSup2, supRateLo, a = 0.5, 0.2, 0.1, 0.8, 1.2
-scDict = {'b': b, 'cSup1': cSup1, 'cSup2': cSup2, 'supRateLo': supRateLo, 'a': a}
+    return eqStrat_matList
 
+def LthetaAdemEqMatsForPlot(numpts, Ctheta_max, a_max, scDict):
+    # Generate list of equilibria matrices for plotting
+    # cSupDelta ranges from 0 to cSupDelta_max, and denotes cSup2-cSup1
+    CthetaVec = np.arange(0, Ctheta_max, (Ctheta_max)/numpts)
+    aVec = np.arange(1.01, 1+a_max, a_max/numpts)
 
+    eq_list = ['LL', 'LLsqz', 'LHexp', 'LHFOC', 'LHsqz', 'HHsqz', 'HH']
+    eqStrat_matList = np.zeros((len(eq_list), cSupVec.shape[0], CthetaVec.shape[0]))
+    eqStrat_matList[:] = np.nan
 
-HHFOClb = CthetaHHFOCLB(scDict)
-xinit = SupPriceHH(scDict,0)
-SupPriceHHexp(scDict, HHFOClb*0.9999)
+    for currcSupind in range(cSupVec.shape[0]):
+        currdict = scDict.copy()
+        currdict['a'] = aVec[currcSupind]
+        # Get bounds under current cSup
+        CthLLUB, CthLHFOCLB, CthLLsqzUB = CthetaLLFOCUB(currdict), CthetaLHFOCLB(currdict), CthetaLLsqzUB(currdict)
+        CthHHLB, devS = CthetaHHFOCLB(currdict)
+        CthLHFOCUB, CthLHsqzUB, CthLHexpLB = CthetaLHFOCUB(currdict), CthetaLHsqzUB(currdict), CthetaLHexpLB(currdict)
+        CthHHexpAdjLB, CthHHexpLB = CthetaHHexpAdjLB(currdict), CthetaHHexpLB(currdict)
+        eqStrat_matList[0, currcSupind, np.where(CthetaVec < CthLLUB)] = 1  # LL
+        eqStrat_matList[1, currcSupind, np.where((CthetaVec > CthLLUB) & (CthetaVec <= CthLLsqzUB))] = 1  # LLsqz
+        eqStrat_matList[2, currcSupind, np.where((CthetaVec >= CthLHexpLB) & (CthetaVec < CthLHFOCLB))] = 1  # LHexp
+        eqStrat_matList[3, currcSupind, np.where((CthetaVec >= CthLHFOCLB) & (CthetaVec <= CthLHFOCUB))] = 1  # LHFOC
+        eqStrat_matList[4, currcSupind, np.where((CthetaVec > CthLHFOCUB) & (CthetaVec < CthLHsqzUB))] = 1  # LHsqz
+        eqStrat_matList[5, currcSupind, np.where((CthetaVec >= CthHHexpLB) & (CthetaVec < CthHHLB))] = 1  # HHsqz
+        eqStrat_matList[6, currcSupind, np.where(CthetaVec >= CthHHLB)] = 1  # HH
 
+    return eqStrat_matList
 
+def SocWelEqMatsForPlot(numpts, uL_min, uL_max, cSup_max, scDict):
+    # Generate list of equilibria matrices for plotting
+    # Each point has a social-welfare maximizing equilibria
+    b, supRateLo, a = scDict['b'], scDict['supRateLo'], scDict['a']
+    # cSup to iterate over
+    cSupVec = np.arange(0.01, cSup_max, cSup_max/numpts)
+    # uL to iterate over
+    uLVec = np.arange(uL_min, uL_max, (uL_max-uL_min)/numpts)
 
-csupvec = np.arange(0.02,0.8,0.01)
-intvec, csupBvec, csupBBvec = [], [], []
-for currcsup in csupvec:
-    scDict['cSup'] = currcsup
-    brange = np.arange(0.01,0.99,0.001)
-    xvec, y1vec, y2vec = [], [], []
-    for currb in brange:
-        scDict['b'] = currb
-        xvec.append(currb)
-        y1vec.append(CthetaLHsqztwoUB(scDict))
-        y2vec.append(CthetaHHLB(scDict))
+    eq_list = ['LLsqz','LHsqz', 'HH']
+    eq_matList = np.zeros((len(eq_list), uLVec.shape[0], cSupVec.shape[0]))
+    eq_matList[:] = np.nan
 
-    intvec.append(brange[np.where(np.array(y1vec)<np.array(y2vec))[0][0]])
-    csupBvec.append(cSupBar(intvec[-1]))
-    csupBBvec.append(cSupBarBar(intvec[-1]))
-
-plt.plot(xvec,y1vec,'r')
-plt.plot(xvec,y2vec,'b')
-plt.show()
-
-plt.plot(csupvec,csupvec,'r')
-plt.plot(csupvec,intvec,'b')
-plt.plot(csupvec,csupBvec,'g')
-plt.plot(csupvec,csupBBvec,'black')
-plt.show()
+    for currcSupind in range(cSupVec.shape[0]):
+        currdict = scDict.copy()
+        currdict['cSup1'], currdict['cSup2'] = cSupVec[currcSupind], cSupVec[currcSupind]
+        # Get bounds under current cSup
+        CthLLsqzUB, CthLHsqzUB = CthetaLLsqzUB(currdict), CthetaLHsqzUB(currdict)
+        # Get prices and welfare under each possible valid equilibrium
+        w1LLsqz, w2LLsqz = SupPriceLLsqz5(currdict, CthLLsqzUB)
+        q1LLsqz, q2LLsqz = q1Opt(w1LLsqz, w2LLsqz, b, a), q2Opt(w1LLsqz, w2LLsqz, b, a)
+        w1LHsqz, w2LHsqz = SupPriceLHsqz(currdict, CthLHsqzUB)
+        q1LHsqz, q2LHsqz = q1Opt(w1LHsqz, w2LHsqz, b, a), q2Opt(w1LHsqz, w2LHsqz, b, a)
+        w1HH, w2HH = SupPriceHH(currdict, 0)
+        q1HH, q2HH = q1Opt(w1HH, w2HH, b, a), q2Opt(w1HH, w2HH, b, a)
+        for curruLind in range(uLVec.shape[0]):
+            socwelLLsqz = SocWel(1, uLVec[curruLind], q1LLsqz, q2LLsqz, 0, 0, supRateLo, supRateLo, 1)
+            socwelLHsqz = SocWel(1, uLVec[curruLind], q1LHsqz, q2LHsqz, 0, currdict['cSup2'], supRateLo, 1, 1)
+            socwelHH = SocWel(1, uLVec[curruLind], q1HH, q2HH, currdict['cSup1'], currdict['cSup2'], 1, 1, 1)
+            besteqind = np.argmax([socwelLLsqz, socwelLHsqz, socwelHH])
+            eq_matList[besteqind, curruLind, currcSupind] = 1
+    return eq_matList
 
 #######################
 # WHOLESALE PRICE PLOTS
 #######################
 # for b=[0.6, 0.9]
-b, cSup1, cSup2, supRateLo, a = 0.5, 0.101, 0.1, 0.8, 1.4
+b, cSup1, cSup2, supRateLo, a = 0.75, 0.3, 0.3, 0.8, 1.00000001
 scDict = {'b': b, 'cSup1': cSup1, 'cSup2': cSup2, 'supRateLo': supRateLo, 'a': a}
 
-CthLLUB, CthHHLB, CthLHFOCLB = CthetaLLFOCUB(scDict), CthetaHHFOCLB(scDict), CthetaLHFOCLB(scDict)
-CthLHFOCUB, CthLHsqzUB = CthetaLHFOCUB(scDict), CthetaLHsqzUB(scDict)
-# CthLLsqzUB, CthLHexpLB, CthHHsqzLB = CthetaLLsqzUB(scDict), CthetaLHexpIRLB(scDict), CthetaHHsqzLB(scDict)
+CthLLUB, CthLHFOCLB, CthLLsqzUB = CthetaLLFOCUB(scDict), CthetaLHFOCLB(scDict), CthetaLLsqzUB(scDict)
+CthHHLB, devS = CthetaHHFOCLB(scDict)
+CthLHFOCUB, CthLHsqzUB, CthLHexpLB = CthetaLHFOCUB(scDict), CthetaLHsqzUB(scDict), CthetaLHexpLB(scDict)
+CthHHexpAdjLB, CthHHexpLB = CthetaHHexpAdjLB(scDict), CthetaHHexpLB(scDict)
 CthetaMax = 1.2*CthHHLB
 CthetaVec = np.arange(0, CthetaMax, 0.001)
 LLprices = np.empty((CthetaVec.shape[0], 2))
 LLprices[:] = np.nan
-HHprices, HHsqzprices, LHexpprices, LHFOCprices = LLprices.copy(), LLprices.copy(), LLprices.copy(), LLprices.copy()
+HHprices, HHexpprices, LHexpprices, LHFOCprices = LLprices.copy(), LLprices.copy(), LLprices.copy(), LLprices.copy()
 LHsqzprices, LHsqztwoprices, LLsqzprices = LLprices.copy(), LLprices.copy(), LLprices.copy()
 # Store prices
 for Cthetaind in range(CthetaVec.shape[0]):
     currCtheta = CthetaVec[Cthetaind]
     if currCtheta <= CthLLUB:  # LL
         LLprices[Cthetaind, :] = SupPriceLL(scDict, currCtheta)
-    # if currCtheta > CthLLUB and currCtheta <= CthLLsqzUB:  # LL sqz
-    #     LLsqzprices[Cthetaind, :] = SupPriceLLSqz(scDict, currCtheta)
-    # if currCtheta > CthLHexpLB and currCtheta < CthLHFOCLB:  # LHexp
-    #     LHexpprices[Cthetaind, :] = SupPriceLHexpIR(scDict, currCtheta)
+    if currCtheta > CthLLUB and currCtheta <= CthLLsqzUB:  # LL sqz
+        LLsqzprices[Cthetaind, :] = SupPriceLLsqz5(scDict, currCtheta)
+    if currCtheta > CthLHexpLB and currCtheta < CthLHFOCLB:  # LHexp
+        LHexpprices[Cthetaind, :] = SupPriceLHexp(scDict, currCtheta)
     if currCtheta >= CthLHFOCLB and currCtheta <= CthLHFOCUB:  # LHFOC
         LHFOCprices[Cthetaind, :] = SupPriceLHFOC(scDict, currCtheta)
     if currCtheta > CthLHFOCUB and currCtheta <= CthLHsqzUB:  # LHsqz
         LHsqzprices[Cthetaind, :] = SupPriceLHsqz(scDict, currCtheta)
-    # if currCtheta >= CthHHsqzLB and currCtheta < CthHHLB:  # HHexp
-    #     HHsqzprices[Cthetaind, :] = SupPriceHHsqz(scDict, currCtheta)
+    if currCtheta >= CthHHexpLB and currCtheta < CthHHexpAdjLB:  # HHexp
+        HHexpprices[Cthetaind, :] = SupPriceHHexp(scDict, currCtheta)
+    if currCtheta >= CthHHexpAdjLB and currCtheta < CthHHLB:  # HHexpAdj
+        if devS == 1:
+            HHexpprices[Cthetaind, :] = SupPriceHHexp1(scDict, currCtheta)
+        elif devS == 2:
+            HHexpprices[Cthetaind, :] = SupPriceHHexp2(scDict, currCtheta)
     if currCtheta >= CthHHLB:
         HHprices[Cthetaind, :] = SupPriceHH(scDict, currCtheta)
 
@@ -436,26 +585,25 @@ fig.suptitle(r'$b=$'+str(b)+', ' +r'$c_1=$'+str(cSup1)+', '+r'$c_2=$'+str(cSup2)
 
 al = 0.8
 LLonecol, LLtwocol, HHonecol, HHtwocol = 'red', 'deeppink', 'indigo', 'mediumorchid'
-LLsqzonecol, LLsqztwocol, HHsqzonecol, HHsqztwocol = 'darkorange', 'bisque', 'sienna', 'sandybrown'
+LLsqzonecol, LLsqztwocol, HHexponecol, HHexptwocol = 'darkorange', 'bisque', 'sienna', 'sandybrown'
 LHonecols = ['limegreen', 'seagreen', 'darkgreen']
 LHtwocols = ['cornflowerblue', 'blue', 'midnightblue']
 lnwd = 5
 
 plt.plot(CthetaVec, LLprices[:, 0], linewidth=lnwd, linestyle='dashed', color=LLonecol, alpha=al)
 plt.plot(CthetaVec, LLprices[:, 1], linewidth=lnwd, color=LLtwocol, alpha=al)
-# plt.plot(CthetaVec, LLsqzprices[:, 0], linewidth=lnwd, color=LLsqzonecol, alpha=al)
-# plt.plot(CthetaVec, LLsqzprices[:, 1], linewidth=lnwd, color=LLsqztwocol, alpha=al)
-# plt.plot(CthetaVec, LHexpprices[:, 0], linewidth=lnwd, color=LHtwocols[0], alpha=al)
-# plt.plot(CthetaVec, LHexpprices[:, 1], linewidth=lnwd, color=LHonecols[0], alpha=al)
+plt.plot(CthetaVec, LLsqzprices[:, 0], linewidth=lnwd, linestyle='dashed', color=LLsqzonecol, alpha=al)
+plt.plot(CthetaVec, LLsqzprices[:, 1], linewidth=lnwd, color=LLsqztwocol, alpha=al)
+plt.plot(CthetaVec, LHexpprices[:, 0], linewidth=lnwd, linestyle='dashed', color=LHtwocols[0], alpha=al)
+plt.plot(CthetaVec, LHexpprices[:, 1], linewidth=lnwd, color=LHonecols[0], alpha=al)
 plt.plot(CthetaVec, LHFOCprices[:, 0], linewidth=lnwd, linestyle='dashed', color=LHtwocols[1], alpha=al)
 plt.plot(CthetaVec, LHFOCprices[:, 1], linewidth=lnwd, color=LHonecols[1], alpha=al)
 plt.plot(CthetaVec, LHsqzprices[:, 0], linewidth=lnwd, linestyle='dashed', color=LHtwocols[2], alpha=al)
 plt.plot(CthetaVec, LHsqzprices[:, 1], linewidth=lnwd, color=LHonecols[2], alpha=al)
-plt.plot(CthetaVec, HHsqzprices[:, 0], linewidth=lnwd, linestyle='dashed', color=HHsqzonecol, alpha=al)
-plt.plot(CthetaVec, HHsqzprices[:, 1], linewidth=lnwd, color=HHsqztwocol, alpha=al)
+plt.plot(CthetaVec, HHexpprices[:, 0], linewidth=lnwd, linestyle='dashed', color=HHexponecol, alpha=al)
+plt.plot(CthetaVec, HHexpprices[:, 1], linewidth=lnwd, color=HHexptwocol, alpha=al)
 plt.plot(CthetaVec, HHprices[:, 0], linewidth=lnwd, linestyle='dashed', color=HHonecol, alpha=al)
 plt.plot(CthetaVec, HHprices[:, 1], linewidth=lnwd, color=HHtwocol, alpha=al)
-# plt.plot(CthetaVec, HHprices[:, 1], linewidth=lnwd, color=HHcol, alpha=al)
 plt.ylim(0, 1.0)
 plt.xlim(0, CthetaMax)
 plt.xlabel(r'$C_{\theta}$', fontsize=14)
@@ -463,40 +611,189 @@ plt.ylabel(r'$w$', fontsize=14, rotation=0, labelpad=14)
 plt.show()
 
 #####################
-# Equilibrium plots
+# Social welfare plot vs prices
 #####################
-# Use b=[0.6,0.9]
-b, cSup, supRateLo = 0.6, 0.2, 0.8
-scDict = {'b': b, 'cSup': cSup, 'supRateLo': supRateLo}
+# TODO: RANGE UL OVER [0, -5?]
+# TODO: UL VS b SP OUTCOME PLOT
+# TODO: UL VS cS SP OUTCOME PLOT, for 2 possible b's
+# TODO: first-best plot where one single decision-maker
+# TODO: proposition that first-best is LL or HH
 
-numpts, CthetaMax, cSupMax = 100, 2.0, 0.9
-alval = 0.7
+b, cSup1, cSup2, supRateLo, a = 0.85, 0.15, 0.15, 0.8, 1
+uH, uL, priceconst = 1, 0.5, 1.0
+scDict = {'b': b, 'cSup1': cSup1, 'cSup2': cSup2, 'supRateLo': supRateLo, 'a': a}
 
-eqStrat_matList = LthetaEqMatsForPlot(numpts, CthetaMax, cSupMax, scDict)
-# Fill holes
-for csupind in range(eqStrat_matList.shape[1]):
-    for cthetaind in range(eqStrat_matList.shape[2]):
-        if np.nansum(eqStrat_matList[:,csupind,cthetaind]) == 0:
-            eqStrat_matList[4, csupind, cthetaind] = 1
+CthLLUB, CthLHFOCLB, CthLLsqzUB = CthetaLLFOCUB(scDict), CthetaLHFOCLB(scDict), CthetaLLsqzUB(scDict)
+CthHHLB, devS = CthetaHHFOCLB(scDict)
+CthLHFOCUB, CthLHsqzUB, CthLHexpLB = CthetaLHFOCUB(scDict), CthetaLHsqzUB(scDict), CthetaLHexpLB(scDict)
+CthHHexpAdjLB, CthHHexpLB = CthetaHHexpAdjLB(scDict), CthetaHHexpLB(scDict)
+CthetaMax = 1.2*CthHHLB
+CthetaVec = np.arange(0, CthetaMax, 0.001)
+LLprices = np.empty((CthetaVec.shape[0], 2))
+LLprices[:] = np.nan
+HHprices, HHexpprices, LHexpprices, LHFOCprices = LLprices.copy(), LLprices.copy(), LLprices.copy(), LLprices.copy()
+LHsqzprices, LHsqztwoprices, LLsqzprices = LLprices.copy(), LLprices.copy(), LLprices.copy()
+# Store prices
+for Cthetaind in range(CthetaVec.shape[0]):
+    currCtheta = CthetaVec[Cthetaind]
+    if currCtheta <= CthLLUB:  # LL
+        LLprices[Cthetaind, :] = SupPriceLL(scDict, currCtheta)
+    if currCtheta > CthLLUB and currCtheta <= CthLLsqzUB:  # LL sqz
+        LLsqzprices[Cthetaind, :] = SupPriceLLsqz5(scDict, currCtheta)
+    if currCtheta > CthLHexpLB and currCtheta < CthLHFOCLB:  # LHexp
+        LHexpprices[Cthetaind, :] = SupPriceLHexp(scDict, currCtheta)
+    if currCtheta >= CthLHFOCLB and currCtheta <= CthLHFOCUB:  # LHFOC
+        LHFOCprices[Cthetaind, :] = SupPriceLHFOC(scDict, currCtheta)
+    if currCtheta > CthLHFOCUB and currCtheta <= CthLHsqzUB:  # LHsqz
+        LHsqzprices[Cthetaind, :] = SupPriceLHsqz(scDict, currCtheta)
+    if currCtheta >= CthHHexpLB and currCtheta < CthHHexpAdjLB:  # HHexp
+        HHexpprices[Cthetaind, :] = SupPriceHHexp(scDict, currCtheta)
+    if currCtheta >= CthHHexpAdjLB and currCtheta < CthHHLB:  # HHexpAdj
+        if devS == 1:
+            HHexpprices[Cthetaind, :] = SupPriceHHexp1(scDict, currCtheta)
+        elif devS == 2:
+            HHexpprices[Cthetaind, :] = SupPriceHHexp2(scDict, currCtheta)
+    if currCtheta >= CthHHLB:
+        HHprices[Cthetaind, :] = SupPriceHH(scDict, currCtheta)
+
+# Store social welfare
+socwelMat = np.empty((7, CthetaVec.shape[0]))
+socwelMat[:] = np.nan
+for Cthetaind in range(CthetaVec.shape[0]):
+    currCtheta = CthetaVec[Cthetaind]
+    if currCtheta <= CthLLUB:  # LL
+        qual1, qual2 = supRateLo, supRateLo
+        w1, w2 = SupPriceLL(scDict, currCtheta)
+        q1, q2 = q1Opt(w1, w2, b, a), q2Opt(w1, w2, b, a)
+        socwelMat[0, Cthetaind] = SocWel(uH, uL, q1, q2, 0, 0, qual1, qual2, priceconst)
+    if currCtheta > CthLLUB and currCtheta <= CthLLsqzUB:  # LL sqz
+        qual1, qual2 = supRateLo, supRateLo
+        w1, w2 = SupPriceLLsqz5(scDict, currCtheta)
+        q1, q2 = q1Opt(w1, w2, b, a), q2Opt(w1, w2, b, a)
+        socwelMat[1, Cthetaind] = SocWel(uH, uL, q1, q2, 0, 0, qual1, qual2, priceconst)
+    if currCtheta > CthLHexpLB and currCtheta < CthLHFOCLB:  # LHexp
+        qual1, qual2 = supRateLo, 1
+        w1, w2 = SupPriceLHexp(scDict, currCtheta)
+        q1, q2 = q1Opt(w1, w2, b, a), q2Opt(w1, w2, b, a)
+        socwelMat[2, Cthetaind] = SocWel(uH, uL, q1, q2, 0, cSup2, qual1, qual2, priceconst)
+    if currCtheta >= CthLHFOCLB and currCtheta <= CthLHFOCUB:  # LHFOC
+        qual1, qual2 = supRateLo, 1
+        w1, w2 = SupPriceLHFOC(scDict, currCtheta)
+        q1, q2 = q1Opt(w1, w2, b, a), q2Opt(w1, w2, b, a)
+        socwelMat[3, Cthetaind] = SocWel(uH, uL, q1, q2, 0, cSup2, qual1, qual2, priceconst)
+    if currCtheta > CthLHFOCUB and currCtheta <= CthLHsqzUB:  # LHsqz
+        qual1, qual2 = supRateLo, 1
+        w1, w2 = SupPriceLHsqz(scDict, currCtheta)
+        q1, q2 = q1Opt(w1, w2, b, a), q2Opt(w1, w2, b, a)
+        socwelMat[4, Cthetaind] = SocWel(uH, uL, q1, q2, 0, cSup2, qual1, qual2, priceconst)
+    if currCtheta >= CthHHexpLB and currCtheta < CthHHexpAdjLB:  # HHexp
+        qual1, qual2 = 1, 1
+        w1, w2 = SupPriceHHexp(scDict, currCtheta)
+        q1, q2 = q1Opt(w1, w2, b, a), q2Opt(w1, w2, b, a)
+        socwelMat[5, Cthetaind] = SocWel(uH, uL, q1, q2, cSup1, cSup2, qual1, qual2, priceconst)
+    if currCtheta >= CthHHexpAdjLB and currCtheta < CthHHLB:  # HHexpAdj
+        if devS == 1:
+            w1, w2 = SupPriceHHexp1(scDict, currCtheta)
+        elif devS == 2:
+            w1, w2 = SupPriceHHexp2(scDict, currCtheta)
+        qual1, qual2 = 1, 1
+        q1, q2 = q1Opt(w1, w2, b, a), q2Opt(w1, w2, b, a)
+        socwelMat[5, Cthetaind] = SocWel(uH, uL, q1, q2, cSup1, cSup2, qual1, qual2, priceconst)
+    if currCtheta >= CthHHLB:  # HHFOC
+        qual1, qual2 = 1, 1
+        w1, w2 = SupPriceHH(scDict, currCtheta)
+        q1, q2 = q1Opt(w1, w2, b, a), q2Opt(w1, w2, b, a)
+        socwelMat[6, Cthetaind] = SocWel(uH, uL, q1, q2, cSup1, cSup2, qual1, qual2, priceconst)
+
 
 fig = plt.figure()
-fig.suptitle(r'$b=$'+str(b)+', '+r'$L=$'+str(supRateLo),
+fig.suptitle(r'$b=$'+str(b)+', ' +r'$c_1=$'+str(cSup1)+', '+r'$c_2=$'+str(cSup2)+', '+r'$L=$'+str(supRateLo)+
+             ',\n'+r'$a=$'+str(a)+', '+r'$u^H=$'+str(uH)+', '+r'$u^L=$'+str(uL),
              fontsize=18, fontweight='bold')
+
+al = 0.8
+cm = plt.get_cmap('Greys')
+cols = cm(np.linspace(0.4, 1, 7))
+lnwd = 5
+
+for i in range(7):
+    plt.plot(CthetaVec, socwelMat[i, :], linewidth=lnwd, color=cols[i], alpha=al)
+plt.ylim(0, np.nanmax(socwelMat)*1.1)
+plt.xlim(0, CthetaMax)
+plt.xlabel(r'$C_{\theta}$', fontsize=14)
+plt.ylabel(r'$U^{SP}$', fontsize=14, rotation=0, labelpad=14)
+plt.show()
+
+#####################
+# Social welfare eq plot, vs cS
+#####################
+b, cSup1, cSup2, supRateLo, a = 0.85, 0.25, 0.25, 0.8, 1
+scDict = {'b': b, 'cSup1': cSup1, 'cSup2': cSup2, 'supRateLo': supRateLo, 'a': a}
+
+numpts, cSupMax = 50, 0.5
+uLmin, uLmax = -2, 0.9
+alval = 0.7
+
+eq_matList = SocWelEqMatsForPlot(numpts, uLmin, uLmax, cSupMax, scDict)
+
+fig = plt.figure()
+fig.suptitle(r'$b=$'+str(b)+', '+r'$L=$'+str(supRateLo), fontsize=18, fontweight='bold')
 ax = fig.add_subplot(111)
 
-eqcolors = ['#cf0234', 'deeppink', '#021bf9', '#0d75f8', '#82cafc', '#5ca904', '#0b4008', 'black']
-labels = ['LL', 'LLsqz', 'LHexp', 'LHFOC', 'LHsqz', 'HHsqz', 'HH', 'N']
+eqcolors = ['deeppink',  '#82cafc',  '#0b4008']
+labels = ['LLsqz', 'LHsqz',  'HH']
 
 imlist = []
 for eqind in range(len(labels)):
     mycmap = matplotlib.colors.ListedColormap(['white', eqcolors[eqind]], name='from_list', N=None)
-    if eqcolors[eqind] == 'black':  # No alpha transparency
-        im = ax.imshow(eqStrat_matList[eqind], vmin=0, vmax=1, aspect='auto',
-                            extent=(0, CthetaMax, 0, cSupMax),
-                            origin="lower", cmap=mycmap, alpha=1)
-    else:
-        im = ax.imshow(eqStrat_matList[eqind], vmin=0, vmax=1, aspect='auto',
-                            extent=(0, CthetaMax, 0, cSupMax),
+    im = ax.imshow(eq_matList[eqind], vmin=0, vmax=1, aspect='auto',
+                            extent=(uLmin, uLmax, 0, cSupMax),
+                            origin="lower", cmap=mycmap, alpha=alval)
+    imlist.append(im)
+
+legwidth = 20
+wraplabels = ['\n'.join(textwrap.wrap(labels[i], width=legwidth)) for i in range(len(labels))]
+patches = [mpatches.Patch(color=eqcolors[i], edgecolor='black', label=wraplabels[i], alpha=alval) for i in range(len(eqcolors))]
+# put those patched as legend-handles into the legend
+ax.legend(handles=patches, bbox_to_anchor=(1.3, 1.0), loc='upper right', borderaxespad=0.1, fontsize=8)
+ax.set_xbound(uLmin, uLmax)
+ax.set_ybound(0, cSupMax)
+ax.set_box_aspect(1)
+plt.xlabel(r'$u_{L}$', fontsize=14)
+plt.ylabel(r'$c_S$', fontsize=14, rotation=0, labelpad=14)
+plt.show()
+
+
+#####################
+# Equilibrium plots: Delta cS
+#####################
+b, cSup1, cSup2, supRateLo, a = 0.6, 0.151, 0.15, 0.75, 1.3
+uH, uL, priceconst = 1, -1, 1.0
+scDict = {'b': b, 'cSup1': cSup1, 'cSup2': cSup2, 'supRateLo': supRateLo, 'a': a}
+
+numpts, CthetaMax, cSupDeltaMax = 50, 1.5, 0.5
+alval = 0.7
+
+eqStrat_matList = LthetaCsupEqMatsForPlot(numpts, CthetaMax, cSupDeltaMax, scDict)
+# Fill holes
+# for csupind in range(eqStrat_matList.shape[1]):
+#     for cthetaind in range(eqStrat_matList.shape[2]):
+#         if np.nansum(eqStrat_matList[:,csupind,cthetaind]) == 0:
+#             eqStrat_matList[4, csupind, cthetaind] = 1
+
+fig = plt.figure()
+fig.suptitle(r'$b=$'+str(b)+', '+r'$L=$'+str(supRateLo)+', '+r'$c^S_2=$'+str(cSup2)+', '+r'$a=$'+str(a),
+             fontsize=18, fontweight='bold')
+ax = fig.add_subplot(111)
+
+eqcolors = ['#cf0234', 'deeppink', '#021bf9', '#0d75f8', '#82cafc', '#5ca904', '#0b4008']
+labels = ['LL', 'LLsqz', 'LHexp', 'LHFOC', 'LHsqz', 'HHsqz', 'HH']
+
+imlist = []
+for eqind in range(len(labels)):
+    mycmap = matplotlib.colors.ListedColormap(['white', eqcolors[eqind]], name='from_list', N=None)
+    im = ax.imshow(eqStrat_matList[eqind], vmin=0, vmax=1, aspect='auto',
+                            extent=(0, CthetaMax, 0, cSupDeltaMax),
                             origin="lower", cmap=mycmap, alpha=alval)
     imlist.append(im)
 
@@ -506,10 +803,55 @@ patches = [mpatches.Patch(color=eqcolors[i], edgecolor='black', label=wraplabels
 # put those patched as legend-handles into the legend
 ax.legend(handles=patches, bbox_to_anchor=(1.3, 1.0), loc='upper right', borderaxespad=0.1, fontsize=8)
 ax.set_xbound(0, CthetaMax)
-ax.set_ybound(0, cSupMax)
+ax.set_ybound(0, cSupDeltaMax)
 ax.set_box_aspect(1)
 plt.xlabel(r'$C_{\theta}$', fontsize=14)
-plt.ylabel(r'$c_S$', fontsize=14, rotation=0, labelpad=14)
+plt.ylabel(r'$\Delta c^S_1$', fontsize=14, rotation=0, labelpad=14)
+plt.show()
+
+#####################
+# Equilibrium plots: Delta a
+#####################
+b, cSup1, cSup2, supRateLo, a = 0.6, 0.3, 0.1, 0.75, 1.3
+uH, uL, priceconst = 1, -1, 1.0
+scDict = {'b': b, 'cSup1': cSup1, 'cSup2': cSup2, 'supRateLo': supRateLo, 'a': a}
+
+numpts, CthetaMax, aDeltaMax = 50, 1.5, 0.5
+alval = 0.7
+
+eqStrat_matList = LthetaAdemEqMatsForPlot(numpts, CthetaMax, aDeltaMax, scDict)
+# Fill holes
+# for csupind in range(eqStrat_matList.shape[1]):
+#     for cthetaind in range(eqStrat_matList.shape[2]):
+#         if np.nansum(eqStrat_matList[:,csupind,cthetaind]) == 0:
+#             eqStrat_matList[4, csupind, cthetaind] = 1
+
+fig = plt.figure()
+fig.suptitle(r'$b=$'+str(b)+', '+r'$L=$'+str(supRateLo)+', '+r'$c^S_1=$'+str(cSup1)+', '+r'$c^S_2=$'+str(cSup2),
+             fontsize=18, fontweight='bold')
+ax = fig.add_subplot(111)
+
+eqcolors = ['#cf0234', 'deeppink', '#021bf9', '#0d75f8', '#82cafc', '#5ca904', '#0b4008']
+labels = ['LL', 'LLsqz', 'LHexp', 'LHFOC', 'LHsqz', 'HHsqz', 'HH']
+
+imlist = []
+for eqind in range(len(labels)):
+    mycmap = matplotlib.colors.ListedColormap(['white', eqcolors[eqind]], name='from_list', N=None)
+    im = ax.imshow(eqStrat_matList[eqind], vmin=0, vmax=1, aspect='auto',
+                            extent=(0, CthetaMax, 0, aDeltaMax),
+                            origin="lower", cmap=mycmap, alpha=alval)
+    imlist.append(im)
+
+legwidth = 20
+wraplabels = ['\n'.join(textwrap.wrap(labels[i], width=legwidth)) for i in range(len(labels))]
+patches = [mpatches.Patch(color=eqcolors[i], edgecolor='black', label=wraplabels[i], alpha=alval) for i in range(len(eqcolors))]
+# put those patched as legend-handles into the legend
+ax.legend(handles=patches, bbox_to_anchor=(1.3, 1.0), loc='upper right', borderaxespad=0.1, fontsize=8)
+ax.set_xbound(0, CthetaMax)
+ax.set_ybound(0, aDeltaMax)
+ax.set_box_aspect(1)
+plt.xlabel(r'$C_{\theta}$', fontsize=14)
+plt.ylabel(r'$\Delta a$', fontsize=14, rotation=0, labelpad=14)
 plt.show()
 
 #####################

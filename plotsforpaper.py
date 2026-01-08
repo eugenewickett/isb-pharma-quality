@@ -30,6 +30,10 @@ def quantOpt(w, wOpp, b):
     # Returns optimal order quantities under dual sourcing
     return max(0, (1-b-w+b*wOpp)/(2*(1-(b**2))))
 
+def SocWel(uH, uL, q1, q2, cSup1, cSup2, lambsup1, lambsup2, Ctheta):
+    # Social welfare
+    return q1*(uH*(lambsup1)+uL*(1-lambsup1)-cSup1) + q2*(uH*(lambsup2)+uL*(1-lambsup2)-cSup2) -\
+        Ctheta*(1-lambsup1*lambsup2)
 
 # Function returning retailer utilities under each of 7 possible policies
 def RetUtil(lambsup1, lambsup2, Ltheta, b, w1, w2):
@@ -38,7 +42,7 @@ def RetUtil(lambsup1, lambsup2, Ltheta, b, w1, w2):
     q2 = max((1 - b - w2 + b * w1) / (2 * (1 - (b ** 2))), 0)
     retval = (1 - b - w1 + b*w2) * (1 - w1 - b*q2 - q1) / (2 * (1 - b ** 2)) + \
                      (1 - b + b*w1 - w2) * (1 - w2 - b*q1 - q2) / (2 * (1 - b ** 2)) - \
-                     Ltheta * ((1) * (1 - lambsup1 * lambsup2))
+                     Ltheta * ((1 - lambsup1 * lambsup2))
     return retval
 
 def SupPriceLL(scDict, Ctheta):
