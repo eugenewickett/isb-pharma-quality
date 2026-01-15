@@ -8,10 +8,7 @@ import matplotlib
 import matplotlib.patches as mpatches
 from matplotlib.widgets import Slider
 import textwrap
-import scipy.optimize as scipyOpt
 from matplotlib.widgets import RadioButtons
-from numpy.core.multiarray import ndarray
-
 # matplotlib.use('qt5agg',force=True)  # pycharm backend doesn't support interactive plots, so we use qt here
 import matplotlib.pyplot as plt
 
@@ -550,39 +547,107 @@ def cSupBarBar(b):
     # From Condition 1 in paper
     return (1-b)*((2+b)**2)/(4+b*(4+b*(1-b)))
 
+def GetCthetaBds(scDict, incr = 1/1000):
+    # Return list of bounds WRT Ctheta
+    CthLHsqzUB, _ = CthetaLHsqzUB(scDict, incr)
+    CthLHsqz2UB = CthetaLHsqztwoUB(scDict, incr)
+    CthHHexpLB, CthHHFOCLB = CthetaHHsqzLB(scDict), CthetaHHLB(scDict)
+    CthLLsqzUB, CthLLFOCUB = CthetaLLsqzUB(scDict),  CthetaLLUB(scDict)
+    CthLHexpLB, CthLHFOCLB, CthLHFOCUB = CthetaLHexpIRLB(scDict, incr), CthetaLHFOCLB(scDict, incr), CthetaLHFOCUB(scDict)
+    return [CthLLFOCUB, CthLLsqzUB, CthLHexpLB, CthLHFOCLB, CthLHFOCUB, CthLHsqzUB, CthLHsqz2UB, CthHHexpLB, CthHHFOCLB]
+
+def SocWelEqMatsForPlot(numpts, uL_min, uL_max, cSup_max, scDict, Cthstep = 1/1000, printUpdate=False):
+    # Generate list of equilibria matrices for plotting
+    # Each point has a social-welfare maximizing equilibria
+    b, supRateLo = scDict['b'], scDict['supRateLo']
+    # cSup to iterate over
+    cSupVec = np.arange(0.01, cSup_max, cSup_max/numpts)
+    # uL to iterate over
+    uLVec = np.arange(uL_min, uL_max, (uL_max-uL_min)/numpts)
+
+    eq_list = ['LL', 'LLsqz', 'LHexp', 'LHFOC', 'LHsqz', 'HHsqz', 'HH', 'N']
+    eq_matList = np.zeros((len(eq_list), uLVec.shape[0], cSupVec.shape[0]))
+    Cth_matList = np.zeros((uLVec.shape[0], cSupVec.shape[0]))
+    SW_matList = np.zeros((uLVec.shape[0], cSupVec.shape[0]))
+    eq_matList[:], Cth_matList[:], SW_matList[:] = np.nan, np.nan, np.nan
+
+    for currcSupind in range(cSupVec.shape[0]):
+        if printUpdate:
+            print('cSup: ' + str(cSupVec[currcSupind]))
+        currdict = scDict.copy()
+        currdict['cSup'], cSup = cSupVec[currcSupind], cSupVec[currcSupind]
+        # Get bounds under current cSup
+        bdList = GetCthetaBds(currdict)
+        # FOC prices don't change WRT Ctheta
+        w1LL, w2LL = SupPriceLL(currdict, 0)
+        q1LL, q2LL = quantOpt(w1LL, w2LL, b), quantOpt(w2LL, w1LL, b)
+        w1LHFOC, w2LHFOC = SupPriceLHFOC(currdict, 0)
+        q1LHFOC, q2LHFOC = quantOpt(w1LHFOC, w2LHFOC, b), quantOpt(w2LHFOC, w1LHFOC, b)
+        w1HH, w2HH = SupPriceHH(currdict, 0)
+        q1HH, q2HH = quantOpt(w1HH, w2HH, b), quantOpt(w2HH, w1HH, b)
+        # Iterate across uL
+        for curruLind in range(uLVec.shape[0]):
+            if printUpdate:
+                print('uL: ' + str(uLVec[curruLind]))
+            # Get best Ctheta WRT social welfare under each equilibrium
+            currBestEq, currBestCth, currBestSW = -1, -1, -1  # Initialize
+            # Get prices and welfare under each possible equilibrium and check against current best
+            swLLFOC = SocWel(1, uLVec[curruLind], q1LL, q2LL, 0, 0, supRateLo, supRateLo, 0)  # LLFOC
+            if swLLFOC > currBestSW:
+                currBestEq, currBestCth, currBestSW = 0, 0, swLLFOC
+            swLHFOC = SocWel(1, uLVec[curruLind], q1LHFOC, q2LHFOC, 0, cSup, supRateLo, 1, bdList[3])  # LHFOC
+            if swLHFOC > currBestSW:
+                currBestEq, currBestCth, currBestSW = 3, bdList[3], swLHFOC
+            swHHFOC = SocWel(1, uLVec[curruLind], q1HH, q2HH, cSup, cSup, 1, 1, bdList[8])  # HHFOC
+            if swHHFOC > currBestSW:
+                currBestEq, currBestCth, currBestSW = 6, bdList[8], swHHFOC
+            # Need to iterate through Ctheta for other equilibria
+            # LLsqz
+            for cThind, cTh in enumerate(np.arange(bdList[0], bdList[1], Cthstep)):
+                w1LLsqz, w2LLsqz = SupPriceLLSqz(currdict, cTh)
+                q1LLsqz, q2LLsqz = quantOpt(w1LLsqz, w2LLsqz, b), quantOpt(w2LLsqz, w1LLsqz, b)
+                swLLsqz = SocWel(1, uLVec[curruLind], q1LLsqz, q2LLsqz, 0, 0, supRateLo, supRateLo, cTh)
+                if swLLsqz > currBestSW:
+                    currBestEq, currBestCth, currBestSW = 1, cTh, swLLsqz
+            # LHexp
+            for cThInd, cTh in enumerate(np.arange(bdList[2], bdList[3], Cthstep)):
+                w1LHexp, w2LHexp = SupPriceLHexpIR(currdict, cTh)
+                q1LHexp, q2LHexp = quantOpt(w1LHexp, w2LHexp, b), quantOpt(w2LHexp, w1LHexp, b)
+                swLHexp = SocWel(1, uLVec[curruLind], q1LHexp, q2LHexp, 0, cSup, supRateLo, 1, cTh)
+                if swLHexp > currBestSW:
+                    currBestEq, currBestCth, currBestSW = 2, cTh, swLHexp
+            # LHsqz1
+            for cThind, cTh in enumerate(np.arange(bdList[4], bdList[5], Cthstep)):
+                w1LHsqz, w2LHsqz = SupPriceLHSqz(currdict, cTh)
+                q1LHsqz, q2LHsqz = quantOpt(w1LHsqz, w2LHsqz, b), quantOpt(w2LHsqz, w1LHsqz, b)
+                swLHsqz = SocWel(1, uLVec[curruLind], q1LHsqz, q2LHsqz, 0, cSup, supRateLo, 1, cTh)
+                if swLHsqz > currBestSW:
+                    currBestEq, currBestCth, currBestSW = 4, cTh, swLHsqz
+            # LHsqz2
+            if bdList[6] > bdList[5]:
+                for cThind, cTh in enumerate(np.arange(bdList[5], bdList[6], Cthstep)):
+                    w1LHsqz, w2LHsqz = SupPriceLHSqzTwo(currdict, cTh)
+                    q1LHsqz, q2LHsqz = quantOpt(w1LHsqz, w2LHsqz, b), quantOpt(w2LHsqz, w1LHsqz, b)
+                    swLHsqz = SocWel(1, uLVec[curruLind], q1LHsqz, q2LHsqz, 0, cSup, supRateLo, 1, cTh)
+                    if swLHsqz > currBestSW:
+                        currBestEq, currBestCth, currBestSW = 4, cTh, swLHsqz
+            # HHexp
+            for cThind, cTh in enumerate(np.arange(bdList[7], bdList[8]-Cthstep, Cthstep)):
+                w1HHsqz, w2HHsqz = SupPriceHHsqz(currdict, cTh)
+                q1HHsqz, q2HHsqz = quantOpt(w1HHsqz, w2HHsqz, b), quantOpt(w2HHsqz, w1HHsqz, b)
+                swHHsqz = SocWel(1, uLVec[curruLind], q1HHsqz, q2HHsqz, cSup, cSup, 1, 1, cTh)
+                if swHHsqz > currBestSW:
+                    currBestEq, currBestCth, currBestSW = 5, cTh, swHHsqz
+            eq_matList[currBestEq, curruLind, currcSupind] = 1
+            Cth_matList[curruLind, currcSupind] = currBestCth
+            SW_matList[curruLind, currcSupind] = currBestSW
+            if printUpdate:
+                print('best eq: ' + str(currBestEq)+', Cth: ' + str(currBestCth) + ', SW: ' + str(currBestSW))
+
+    return eq_matList, Cth_matList, SW_matList
+
 b, cSup, supRateLo = 0.5, 0.2, 0.8
 scDict = {'b': b, 'cSup': cSup, 'supRateLo': supRateLo}
-
-CthetaLLsqzUB(scDict)
-
-CthetaLHFOCUB(scDict)
-CthetaLHFOCLB(scDict)
-
-csupvec = np.arange(0.02,0.8,0.01)
-intvec, csupBvec, csupBBvec = [], [], []
-for currcsup in csupvec:
-    scDict['cSup'] = currcsup
-    brange = np.arange(0.01,0.99,0.001)
-    xvec, y1vec, y2vec = [], [], []
-    for currb in brange:
-        scDict['b'] = currb
-        xvec.append(currb)
-        y1vec.append(CthetaLHsqztwoUB(scDict))
-        y2vec.append(CthetaHHLB(scDict))
-
-    intvec.append(brange[np.where(np.array(y1vec)<np.array(y2vec))[0][0]])
-    csupBvec.append(cSupBar(intvec[-1]))
-    csupBBvec.append(cSupBarBar(intvec[-1]))
-
-plt.plot(xvec,y1vec,'r')
-plt.plot(xvec,y2vec,'b')
-plt.show()
-
-plt.plot(csupvec,csupvec,'r')
-plt.plot(csupvec,intvec,'b')
-plt.plot(csupvec,csupBvec,'g')
-plt.plot(csupvec,csupBBvec,'black')
-plt.show()
 
 #######################
 # WHOLESALE PRICE PLOTS
@@ -903,6 +968,59 @@ plt.ylim(-0.02, utilmax)
 plt.xlim(0, CthetaMax)
 plt.xlabel(r'$C_{\theta}$', fontsize=14)
 plt.ylabel(r'$U^R$', fontsize=14, rotation=0, labelpad=14)
+plt.show()
+
+
+
+#############################
+# Social welfare plot
+#############################
+b, cSup, supRateLo = 0.95, 0.2, 0.8
+scDict = {'b': b, 'cSup': cSup, 'supRateLo': supRateLo}
+uL_min, uL_max = -1.5, 0.75
+cSup_max = 0.5
+numpts, alval = 6, 0.9
+
+eqMat, CthMat, SWMat = SocWelEqMatsForPlot(numpts, uL_min, uL_max, cSup_max, scDict, printUpdate=True)
+
+fig = plt.figure()
+fig.suptitle(r'$b=$'+str(b)+', '+r'$L=$'+str(supRateLo),
+             fontsize=18, fontweight='bold')
+ax1 = fig.add_subplot(221)
+
+eqcolors = ['#cf0234', 'deeppink', '#021bf9', '#0d75f8', '#82cafc', '#5ca904', '#0b4008', 'black']
+labels = ['LL', 'LLsqz', 'LHexp', 'LHFOC', 'LHsqz', 'HHsqz', 'HH', 'N']
+
+imlist = []
+for eqind in range(len(labels)):
+    mycmap = matplotlib.colors.ListedColormap(['white', eqcolors[eqind]], name='from_list', N=None)
+    if eqcolors[eqind] == 'black':  # No alpha transparency
+        im = ax1.imshow(eqMat[eqind].T, vmin=0, vmax=1, aspect='auto',
+                            extent=(uL_min, uL_max, 0, cSup_max),
+                            origin="lower", cmap=mycmap, alpha=1)
+    else:
+        im = ax1.imshow(eqMat[eqind].T, vmin=0, vmax=1, aspect='auto',
+                            extent=(uL_min, uL_max, 0, cSup_max),
+                            origin="lower", cmap=mycmap, alpha=alval)
+    imlist.append(im)
+
+legwidth = 20
+wraplabels = ['\n'.join(textwrap.wrap(labels[i], width=legwidth)) for i in range(len(labels))]
+patches = [mpatches.Patch(color=eqcolors[i], edgecolor='black', label=wraplabels[i], alpha=alval) for i in range(len(eqcolors))]
+# put those patched as legend-handles into the legend
+ax1.legend(handles=patches, bbox_to_anchor=(1.3, 1.0), loc='upper right', borderaxespad=0.1, fontsize=8)
+ax1.set_xbound(uL_min, uL_max)
+ax1.set_ybound(0, cSup_max)
+ax1.set_box_aspect(1)
+plt.xlabel(r'$u_{L}$', fontsize=14)
+plt.ylabel(r'$c_S$', fontsize=14, rotation=0, labelpad=14)
+ax2 = fig.add_subplot(222)
+im = ax2.imshow(CthMat.T, vmin=np.min(CthMat), vmax=np.max(CthMat), aspect='auto', extent=(uL_min, uL_max, 0, cSup_max),
+                            origin="lower", cmap='Reds', alpha=1)
+ax3 = fig.add_subplot(223)
+im = ax3.imshow(SWMat.T, vmin=np.min(SWMat), vmax=np.max(SWMat), aspect='auto', extent=(uL_min, uL_max, 0, cSup_max),
+                            origin="lower", cmap='Blues', alpha=1)
+
 plt.show()
 
 
