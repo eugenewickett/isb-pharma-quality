@@ -51,7 +51,7 @@ def q2Opt(w1, w2, b):
 
 def RetUtil(b, w1, w2, Ctheta, lambsup1, lambsup2):
     # Returns retailer utility under pi=D
-    q1, q2 = q1Opt(w1, w2, b), q2Opt(w1, w2, b, a)
+    q1, q2 = q1Opt(w1, w2, b), q2Opt(w1, w2, b)
     prof1, prof2 = q1*(invDemandPrice(q1, q2, b)-w1), q2*(invDemandPrice(q2, q1, b)-w2)
     insppen = Ctheta * ((1 - lambsup1 * lambsup2))
     return prof1 + prof2 - insppen
@@ -102,8 +102,9 @@ def SupPriceHHsqz(scDict, Ctheta):
     w2 = w1
     return max(w1, 0), max(w2, 0)
 
-def funcLHexpPrice(x, scDict, Ctheta, Cbeta):
+def funcLHexpRetPrice(x, scDict, Ctheta, Cbeta):
     # When only S2 wants to move off-path; S1 chooses price s.t. S2 is indifferent, S2 chooses FOC
+    # Retailer-penalty induced
     b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
     term1 = -1*(((cS - x[1])*(-1 + b - b*x[0] + x[1])) / (2*(-1 + (b**2)))) + Cbeta*(-1 + supRateHi)
     radterm1 = np.sqrt((((-1 + x[0])**2) + 4* Ctheta*(-1 + (supRateLo**2)))/(-1 + (b**2)))
@@ -113,15 +114,15 @@ def funcLHexpPrice(x, scDict, Ctheta, Cbeta):
     retval2 = x[1] - (0.5*(1 + cS + b*(-1 + x[0])))
     return [retval1, retval2]
 
-def SupPriceLHexp(scDict, Ctheta, Cbeta, tol=1E-8):
+def SupPriceLHexpRet(scDict, Ctheta, Cbeta, tol=1E-8):
     # Returns on-path LHexp prices
     xinit = SupPriceLHFOC(scDict, 0)
-    root, infodict, _, _ = fsolve(funcLHexpPrice, [xinit[0], xinit[1]], args=(scDict, Ctheta, Cbeta), full_output=True)
+    root, infodict, _, _ = fsolve(funcLHexpRetPrice, [xinit[0], xinit[1]], args=(scDict, Ctheta, Cbeta), full_output=True)
     if np.sum(np.abs(infodict['fvec'])) > tol or np.isnan(infodict['fvec'][0]):
         root= [-1, -1]
     return root[0], root[1]
 
-def funcHHexpPrice(x, scDict, Ctheta, Cbeta):
+def funcHHexpRetPrice(x, scDict, Ctheta, Cbeta):
     # x = [w1HHexp, w2HHexp], candidated HHexp prices
     b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
     term1 = -1*(((cS - x[0])*(-1 + b + x[0] - b*x[1]))/(2*(-1 + (b**2)))) + Cbeta*(-1 +supRateHi)
@@ -134,28 +135,120 @@ def funcHHexpPrice(x, scDict, Ctheta, Cbeta):
     retval2 = term3 - term4
     return [retval1, retval2]
 
-def SupPriceHHexp(scDict, Ctheta, Cbeta, tol=1E-8):
+def SupPriceHHexpRet(scDict, Ctheta, Cbeta, tol=1E-8):
     # Returns on-path HHexp prices
     xinit = SupPriceHH(scDict, 0)
-    root, infodict, _, _ = fsolve(funcHHexpPrice, [xinit[0], xinit[1]], args=(scDict, Ctheta, Cbeta), full_output=True)
+    root, infodict, _, _ = fsolve(funcHHexpRetPrice, [xinit[0], xinit[1]], args=(scDict, Ctheta, Cbeta), full_output=True)
     if np.sum(np.abs(infodict['fvec'])) > tol or np.isnan(infodict['fvec'][0]):
         root= [-1, -1]
     return root[0], root[1]
 
+def SupPriceLHexpSup(scDict, Ctheta, Cbeta):
+    # Returns on-path LLsqz prices
+    b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
+    w1 = (2*(-1 + b)*cS + (cS**2) - 8*(-1 + (b**2))*Cbeta*(supRateHi - supRateLo))/(2*b*cS)
+    w2 = (3*cS)/4 - (2*(-1 + (b**2))*Cbeta*(supRateHi - supRateLo))/cS
+    return max(w1, 0), max(w2, 0)
+
+def SupPriceHHexpSup(scDict, Ctheta, Cbeta):
+    # Returns on-path LLsqz prices
+    b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
+    w1 = ((b**2) - b* (3 + 2*cS) + 2* (1 + cS + np.sqrt(-((-1 + b) ((-2 + b)*cS - (-1 + b)*(cS**2) +
+         2*((-2 + b)**2)* (1 + b)*Cbeta*(supRateHi - supRateLo))))))/((-2 + b)**2)
+    w2 = w1
+    return max(w1, 0), max(w2, 0)
+
+
+def CbetaLLFOCUB(scDict, Ctheta):
+    # LL FOC UB in Cbeta
+    # Depends on whether off-path prices violate retailer IR
+    b, cS, supRateHi, supRateLo = scDict['b'], scDict['cSup'], scDict['supRateHi'], scDict['supRateLo']
+    # First check if supIC off-path price violates retailer IR; WLOG S2 deviates
+    w1on, w2on = SupPriceLL(scDict, Ctheta)
+    w2off = 0.5*(2 + 2/(-2 + b) + cS)
+    if RetUtil(b, w1on, w2off, Ctheta, supRateLo, supRateHi) < 0:  # Use retIR-based bound
+        radterm = np.sqrt((1 + 4*((-2 + b)**2)*Ctheta*(-1+supRateHi*supRateLo))/(((-2+b)**2)*(-1+(b**2))))
+        retval = -((((-1 + b)**2) + (-2 + b)*(-1 + (b**2))*radterm*(2+2*(-2 + b) - (-2 + b)*cS +(-2 + b)*(-1 +\
+                 (b**2))*radterm))/(2*((-2 + b)**2)*(-1 + (b**2))*(supRateHi - supRateLo)))
+    else:  # Use supIC-based bound
+        retval = (((-1 + (b**2))**2)*((4*(-1+b)*cS)/((-2+b)*((-1 + (b**2))**2))-(cS**2)/((-1+(b**2))**2)))/(8*(-1+\
+                  b)*(1+b)*(-1*supRateHi+supRateLo))
+    return retval
 
 def CthetaLLFOCUB(scDict):
     # LL FOC UB in Ctheta
-    b, cS1, cS2, supRateLo, a = scDict['b'], scDict['cSup1'], scDict['cSup2'], scDict['supRateLo'], scDict['a']
-    retval = (4*(1+(a**2))-3*(1+(a**2))*(b**2)-2*a*(b**3))/(4*((-4+(b**2))**2)*(-1+(b**2))*(-1+ (supRateLo**2)))
+    b, cS, supRateHi, supRateLo = scDict['b'], scDict['cSup'], scDict['supRateHi'], scDict['supRateLo']
+    retval = 1/(2*((2 - b)**2)*(1 + b)*(1 - (supRateLo**2)))
+    return retval
+
+def CbetaLHFOCUB(scDict, Ctheta):
+    # LH FOC UB in Cbeta
+    # S1 moves to H at this bound; doesn't depend on Ctheta
+    b, cS, supRateHi, supRateLo = scDict['b'], scDict['cSup'], scDict['supRateHi'], scDict['supRateLo']
+    retval = (cS*(8 - 4*b*(1 + b)-4*cS + b*(4+b)*cS))/(8*(4 - 5*(b**2) + (b**4))*(supRateHi-supRateLo))
     return retval
 
 def CthetaLHFOCUB(scDict):
     # LH FOC UB in Ctheta
-    b, cS1, cS2, supRateLo, a = scDict['b'], scDict['cSup1'], scDict['cSup2'], scDict['supRateLo'], scDict['a']
-    retval = ((-4+3*(b**2)+(a - cS2)*(2*(b**3)+a*(-4 + 3*(b**2))+4*cS2-3*(b**2)*cS2))/(4*((-4+(b**2))**2)*(1-\
-                        (b**2))*(-1+supRateLo)))
+    b, cS, supRateHi, supRateLo = scDict['b'], scDict['cSup'], scDict['supRateHi'], scDict['supRateLo']
+    retval = (8 + 2*(b**3)*(-1 + cS) + 4*(-2 + cS)*cS - 3*(b**2)*(2 + (-2 + cS)*cS))/(4*((-4 + (b**2))**2)*(-1 +\
+                (b**2))*(-1 + supRateHi*supRateLo))
     return retval
 
+def CheckLHFOCLB(scDict, Ctheta, Cbeta):
+    # Returns True if Ctheta/Cbeta combination is sufficiently *high* to sustain LH FOC; else returns False
+    b, cS, supRateHi, supRateLo = scDict['b'], scDict['cSup'], scDict['supRateHi'], scDict['supRateLo']
+    # Initialize as True
+    retBool = True
+    # First check if Cbeta sufficiently low for S2 to want to move
+    CbetaLB1 = (cS*(8 - 4*cS + b*(-4 + b*(-4 + 3*cS))))/(8*(4 - 5*(b**2) + (b**4))*(supRateHi - supRateLo))
+    CthetaLB1 = (32 + b*(-8*b*(3+b)+4*(-1 + b)*((2 + b)**2)*cS+b*(4 - 3*(b**2))*(cS**2)))/(16*((-4 + (b**2))**2)*(-1+\
+                    (b**2))*(-1 + (supRateLo**2)))
+    if Cbeta <= CbetaLB1 and Ctheta <= CthetaLB1:  # There exists feasible and desired S2 move to L
+        retBool = False
+    # Check if off-path IR move is desirable
+    if retBool is True:
+        radterm = np.sqrt((4 - 64*Ctheta + b*(4 - 4*cS + b*(((-1 + cS)**2) - 4*(-8 + (b**2))*Ctheta)) +\
+                    4*((-4 + (b**2))**2)*Ctheta*(supRateLo**2))/(((-4 + (b**2))**2)*(-1 + (b**2))))
+        Cbetaterm = (((-2 + b + (b**2) + 2*cS - (b**2)*cS)**2)/((-4 + (b**2))**2) + (-1 + (b**2))*radterm*(2 +\
+                    2/(-2+b)+((b**2)*cS)/(4 - (b**2))+(-1 +(b**2))*radterm))/(2*(-1 + (b**2))*(supRateHi - supRateLo))
+        # todo: FILL HERE
+        if Cbeta < Cbetaterm:
+            retBool = False
+
+    return retBool
+
+def CbetaHHFOCLB(scDict, Ctheta):
+    # HH FOC LB in Cbeta
+    # Both suppliers move to H beyond this bound; doesn't depend on Ctheta
+    b, cS, supRateHi, supRateLo = scDict['b'], scDict['cSup'], scDict['supRateHi'], scDict['supRateLo']
+    retval = (cS*(4 - 2*cS + b*(-4 + 3*cS)))/(8*(-2 + b)*(-1 + b)*(1 + b)*(supRateHi - supRateLo))
+    return retval
+
+def CheckHHFOCLB(scDict, Ctheta, Cbeta):
+    # Returns True if Ctheta/Cbeta combination is sufficiently *high* to sustain HH FOC; else returns False
+    b, cS, supRateHi, supRateLo = scDict['b'], scDict['cSup'], scDict['supRateHi'], scDict['supRateLo']
+    # Initialize as True
+    retBool = True
+    # First check if Cbeta sufficiently low for S2 to want to move
+    CbetaLB1 = CbetaHHFOCLB(scDict, 0)
+    if Cbeta > CbetaLB1:
+        retBool = False
+    CthetaLB1 = (8 + 4*b*(-2 + cS) + (b**2)*(4 - 3*cS)*cS + 4*(-2 + cS)*cS)/(16*((-2 + b)**2)*(-1 +
+                    (b**2))*(-1 + supRateHi*supRateLo))
+    if Cbeta <= CbetaLB1 and Ctheta <= CthetaLB1:  # There exists feasible and desired S2 move to L
+        retBool = False
+    # Check if off-path IR move is desirable
+    if retBool is True:
+        radterm = np.sqrt((1+(-2+cS)*cS+4*((-2+b)**2)*Ctheta*(-1+supRateHi*supRateLo))/(((-2 + b)**2)*(-1 + (b**2))))
+        Cbetaterm = 1/(2*((-2 + b)**2)*(1 + b)*(supRateHi - supRateLo))*(2*b*(-1 + cS)*(-1 + cS + radterm) +
+                    4*(4*Ctheta*(-1 + supRateHi*supRateLo) + radterm) + (b**2)*(-12*Ctheta*(-1 + supRateHi* supRateLo)+
+                    (-4 + cS)*radterm) + (b**3)*(4*Ctheta*(-1 + supRateHi*supRateLo) - (-2 + cS)*radterm))
+        if Cbeta < Cbetaterm:
+            retBool = False
+    return retBool
+
+# Todo: OLD BOUNDS LISTED BELOW, NEED TO VERIFY
 def CthetaLHFOCLB(scDict, step=1/10000):
     # LH FOC LB in Ctheta
     b, cS1, cS2, supRateLo, a = scDict['b'], scDict['cSup1'], scDict['cSup2'], scDict['supRateLo'], scDict['a']
@@ -351,97 +444,43 @@ def GetEqPriceList(scDict, Ctheta, Cbeta):
     # Returns a list of 8 sets of equilibrium prices
     LL1, LL2 = SupPriceLL(scDict, Ctheta)
     LLsqz1, LLsqz2 = SupPriceLLsqz(scDict, Ctheta)
-    LHexp1, LHexp2 = SupPriceLHexp(scDict, Ctheta, Cbeta)
+    LHexpRet1, LHexpRet2 = SupPriceLHexpRet(scDict, Ctheta, Cbeta)
+    LHexpSup1, LHexpSup2 = SupPriceLHexpSup(scDict, Ctheta, Cbeta)
     LHFOC1, LHFOC2 = SupPriceLHFOC(scDict, Ctheta)
     LHsqz1, LHsqz2 = SupPriceLHsqz(scDict, Ctheta)
-    HHexp1, HHexp2 = SupPriceHHexp(scDict, Ctheta, Cbeta)
+    HHexpRet1, HHexpRet2 = SupPriceHHexpRet(scDict, Ctheta, Cbeta)
+    HHexpSup1, HHexpSup2 = SupPriceHHexpSup(scDict, Ctheta, Cbeta)
     HH1, HH2 = SupPriceHH(scDict, Ctheta)
     HHsqz1, HHsqz2 = SupPriceHHsqz(scDict, Ctheta)
-    retList = [(LL1, LL2), (LLsqz1, LLsqz2), (LHexp1, LHexp2), (LHFOC1, LHFOC2), (LHsqz1, LHsqz2),
-               (HHexp1, HHexp2), (HH1, HH2), (HHsqz1, HHsqz2)]
+    retList = [(LL1, LL2), (LLsqz1, LLsqz2), (LHexpRet1, LHexpRet2), (LHexpSup1, LHexpSup2), (LHFOC1, LHFOC2),
+               (LHsqz1, LHsqz2), (HHexpRet1, HHexpRet2), (HHexpSup1, HHexpSup2), (HH1, HH2), (HHsqz1, HHsqz2)]
     return retList
 
 def CthetaCbetaMatsForPlot(numpts, Ctheta_max, Cbeta_max, scDict):
     # Generate list of equilibria matrices for plotting
-    # Iterates through each (Ctheta, Cbeta) pair and checks if each set of equilibrium prices satisfies IR and IC conds
     CthetaVec = np.arange(0, Ctheta_max, (Ctheta_max)/numpts)
     CbetaVec = np.arange(0, Cbeta_max, (Cbeta_max) / numpts)
 
     eq_list = ['LL', 'LLsqz', 'LHexp', 'LHFOC', 'LHsqz', 'HHexp', 'HH', 'HHsqz', 'N']
-    eqStrat_matList = np.zeros((len(eq_list), cSupVec.shape[0], CthetaVec.shape[0]))
+    eqStrat_matList = np.zeros((len(eq_list), CthetaVec.shape[0], CbetaVec.shape[0]))
     eqStrat_matList[:] = np.nan
 
-    for currCtheta in range(CthetaVec.shape[0]):
-        for currCbeta in range(CbetaVec.shape[0]):
+    # Fixed Ctheta and Cbeta bounds
+    CthLLUB, CthLHUB = CthetaLLFOCUB(scDict), CthetaLHFOCUB(scDict)
+
+    CbeLHUB, CbeHHLB = CbetaLHFOCUB(scDict, 0), CbetaHHFOCLB(scDict, 0)
+
+    for currCthetaind, currCtheta in enumerate(CthetaVec):
+        CbeLLUB = CbetaLLFOCUB(scDict, currCtheta)
+        for currCbetaind, currCbeta in enumerate(CbetaVec):
             # Get on-path prices
-            priceList = GetEqPriceList(scDict, currCtheta, currCbeta)
-            
-
-
-        eqStrat_matList[0, currcSupind, np.where(CthetaVec < CthLLUB)] = 1  # LL
-        eqStrat_matList[1, currcSupind, np.where((CthetaVec > CthLLUB) & (CthetaVec <= CthLLsqzUB))] = 1  # LLsqz
-        eqStrat_matList[2, currcSupind, np.where((CthetaVec >= CthLHexpLB) & (CthetaVec < CthLHFOCLB))] = 1  # LHexp
-        eqStrat_matList[3, currcSupind, np.where((CthetaVec >= CthLHFOCLB) & (CthetaVec <= CthLHFOCUB))] = 1  # LHFOC
-        eqStrat_matList[4, currcSupind, np.where((CthetaVec > CthLHFOCUB) & (CthetaVec < CthLHsqzUB))] = 1  # LHsqz
-        eqStrat_matList[5, currcSupind, np.where((CthetaVec >= CthHHexpLB) & (CthetaVec < CthHHLB))] = 1  # HHsqz
-        eqStrat_matList[6, currcSupind, np.where(CthetaVec >= CthHHLB)] = 1  # HH
-
-    return eqStrat_matList
-
-
-def LthetaCsupEqMatsForPlot(numpts, Ctheta_max, cSupDelta_max, scDict):
-    # Generate list of equilibria matrices for plotting
-    # cSupDelta ranges from 0 to cSupDelta_max, and denotes cSup2-cSup1
-    CthetaVec = np.arange(0, Ctheta_max, (Ctheta_max)/numpts)
-    cSupVec = np.arange(0.01, cSupDelta_max, cSupDelta_max/numpts)
-
-    eq_list = ['LL', 'LLsqz', 'LHexp', 'LHFOC', 'LHsqz', 'HHsqz', 'HH']
-    eqStrat_matList = np.zeros((len(eq_list), cSupVec.shape[0], CthetaVec.shape[0]))
-    eqStrat_matList[:] = np.nan
-
-    for currcSupind in range(cSupVec.shape[0]):
-        currdict = scDict.copy()
-        currdict['cSup1'] = scDict['cSup2'] + cSupVec[currcSupind]
-        # Get bounds under current cSup
-        CthLLUB, CthLHFOCLB, CthLLsqzUB = CthetaLLFOCUB(currdict), CthetaLHFOCLB(currdict), CthetaLLsqzUB(currdict)
-        CthHHLB, devS = CthetaHHFOCLB(currdict)
-        CthLHFOCUB, CthLHsqzUB, CthLHexpLB = CthetaLHFOCUB(currdict), CthetaLHsqzUB(currdict), CthetaLHexpLB(currdict)
-        CthHHexpAdjLB, CthHHexpLB = CthetaHHexpAdjLB(currdict), CthetaHHexpLB(currdict)
-        eqStrat_matList[0, currcSupind, np.where(CthetaVec < CthLLUB)] = 1  # LL
-        eqStrat_matList[1, currcSupind, np.where((CthetaVec > CthLLUB) & (CthetaVec <= CthLLsqzUB))] = 1  # LLsqz
-        eqStrat_matList[2, currcSupind, np.where((CthetaVec >= CthLHexpLB) & (CthetaVec < CthLHFOCLB))] = 1  # LHexp
-        eqStrat_matList[3, currcSupind, np.where((CthetaVec >= CthLHFOCLB) & (CthetaVec <= CthLHFOCUB))] = 1  # LHFOC
-        eqStrat_matList[4, currcSupind, np.where((CthetaVec > CthLHFOCUB) & (CthetaVec < CthLHsqzUB))] = 1  # LHsqz
-        eqStrat_matList[5, currcSupind, np.where((CthetaVec >= CthHHexpLB) & (CthetaVec < CthHHLB))] = 1  # HHsqz
-        eqStrat_matList[6, currcSupind, np.where(CthetaVec >= CthHHLB)] = 1  # HH
-
-    return eqStrat_matList
-
-def LthetaAdemEqMatsForPlot(numpts, Ctheta_max, a_max, scDict):
-    # Generate list of equilibria matrices for plotting
-    # cSupDelta ranges from 0 to cSupDelta_max, and denotes cSup2-cSup1
-    CthetaVec = np.arange(0, Ctheta_max, (Ctheta_max)/numpts)
-    aVec = np.arange(1.01, 1+a_max, a_max/numpts)
-
-    eq_list = ['LL', 'LLsqz', 'LHexp', 'LHFOC', 'LHsqz', 'HHsqz', 'HH']
-    eqStrat_matList = np.zeros((len(eq_list), cSupVec.shape[0], CthetaVec.shape[0]))
-    eqStrat_matList[:] = np.nan
-
-    for currcSupind in range(cSupVec.shape[0]):
-        currdict = scDict.copy()
-        currdict['a'] = aVec[currcSupind]
-        # Get bounds under current cSup
-        CthLLUB, CthLHFOCLB, CthLLsqzUB = CthetaLLFOCUB(currdict), CthetaLHFOCLB(currdict), CthetaLLsqzUB(currdict)
-        CthHHLB, devS = CthetaHHFOCLB(currdict)
-        CthLHFOCUB, CthLHsqzUB, CthLHexpLB = CthetaLHFOCUB(currdict), CthetaLHsqzUB(currdict), CthetaLHexpLB(currdict)
-        CthHHexpAdjLB, CthHHexpLB = CthetaHHexpAdjLB(currdict), CthetaHHexpLB(currdict)
-        eqStrat_matList[0, currcSupind, np.where(CthetaVec < CthLLUB)] = 1  # LL
-        eqStrat_matList[1, currcSupind, np.where((CthetaVec > CthLLUB) & (CthetaVec <= CthLLsqzUB))] = 1  # LLsqz
-        eqStrat_matList[2, currcSupind, np.where((CthetaVec >= CthLHexpLB) & (CthetaVec < CthLHFOCLB))] = 1  # LHexp
-        eqStrat_matList[3, currcSupind, np.where((CthetaVec >= CthLHFOCLB) & (CthetaVec <= CthLHFOCUB))] = 1  # LHFOC
-        eqStrat_matList[4, currcSupind, np.where((CthetaVec > CthLHFOCUB) & (CthetaVec < CthLHsqzUB))] = 1  # LHsqz
-        eqStrat_matList[5, currcSupind, np.where((CthetaVec >= CthHHexpLB) & (CthetaVec < CthHHLB))] = 1  # HHsqz
-        eqStrat_matList[6, currcSupind, np.where(CthetaVec >= CthHHLB)] = 1  # HH
+            # priceList = GetEqPriceList(scDict, currCtheta, currCbeta)
+            if currCtheta < CthLLUB and currCbeta < CbeLLUB:  # LLFOC
+                eqStrat_matList[0, currCthetaind, currCbetaind] = 1
+            if CheckLHFOCLB(scDict, currCtheta, currCbeta) and currCtheta < CthLHUB and currCbeta < CbeLHUB:  # LHFOC
+                eqStrat_matList[3, currCthetaind, currCbetaind] = 1
+            if currCbeta >= CbeHHLB or CheckHHFOCLB(scDict, currCtheta, currCbeta):  # HHFOC
+                eqStrat_matList[6, currCthetaind, currCbetaind] = 1
 
     return eqStrat_matList
 
@@ -478,11 +517,58 @@ def SocWelEqMatsForPlot(numpts, uL_min, uL_max, cSup_max, scDict):
             eq_matList[besteqind, curruLind, currcSupind] = 1
     return eq_matList
 
+
+
+#######################
+# EQUILIBRIUM PLOTS
+#######################
+b, cSup, supRateLo, supRateHi = 0.6, 0.3, 0.8, 1.0
+scDict = {'b': b, 'cSup': cSup, 'supRateLo': supRateLo, 'supRateHi': supRateHi}
+numpts = 50
+CthetaMax, CbetaMax = 1.2, CbetaHHFOCLB(scDict, 0)*1.2
+
+eqMats = CthetaCbetaMatsForPlot(numpts, CthetaMax, CbetaMax, scDict)
+
+alval = 0.7
+
+fig = plt.figure()
+fig.suptitle(r'$b=$'+str(b)+', '+r'$c_S=$'+str(cSup)+', '+r'$L=$'+str(supRateLo),
+             fontsize=18, fontweight='bold')
+ax = fig.add_subplot(111)
+
+eqcolors = ['#cf0234', 'deeppink', '#021bf9', '#0d75f8', '#82cafc', '#5ca904', '#0b4008']
+labels = ['LL', 'LLsqz', 'LHexp', 'LHFOC', 'LHsqz', 'HHsqz', 'HH']
+
+imlist = []
+for eqind in range(len(labels)):
+    mycmap = matplotlib.colors.ListedColormap(['white', eqcolors[eqind]], name='from_list', N=None)
+    im = ax.imshow(eqMats[eqind].T, vmin=0, vmax=1, aspect='auto',
+                            extent=(0, CthetaMax, 0, CbetaMax),
+                            origin="lower", cmap=mycmap, alpha=alval)
+    imlist.append(im)
+
+legwidth = 20
+wraplabels = ['\n'.join(textwrap.wrap(labels[i], width=legwidth)) for i in range(len(labels))]
+patches = [mpatches.Patch(color=eqcolors[i], edgecolor='black', label=wraplabels[i], alpha=alval) for i in range(len(eqcolors))]
+# put those patched as legend-handles into the legend
+ax.legend(handles=patches, bbox_to_anchor=(1.3, 1.0), loc='upper right', borderaxespad=0.1, fontsize=8)
+ax.set_xbound(0, CthetaMax)
+ax.set_ybound(0, CbetaMax)
+ax.set_box_aspect(1)
+plt.xlabel(r'$C_{\theta}^R$', fontsize=14)
+plt.ylabel(r'$C_{\beta}^S$', fontsize=14, rotation=0, labelpad=14)
+plt.show()
+
+
+
+
+# TODO: OLD PLOTTING SECTIONS BELOW HERE
+
 #######################
 # WHOLESALE PRICE PLOTS
 #######################
 # for b=[0.6, 0.9]
-b, cSup, supRateLo, supRateHi = 0.75, 0.3, 0.8, 0.98
+b, cSup, supRateLo, supRateHi = 0.75, 0.3, 0.8, 1.0
 scDict = {'b': b, 'cSup': cSup, 'supRateLo': supRateLo, 'supRateHi': supRateHi}
 
 CthLLUB, CthLHFOCLB, CthLLsqzUB = CthetaLLFOCUB(scDict), CthetaLHFOCLB(scDict), CthetaLLsqzUB(scDict)
