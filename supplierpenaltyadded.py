@@ -151,12 +151,19 @@ def SupPriceLHexpSup(scDict, Ctheta, Cbeta):
     return max(w1, 0), max(w2, 0)
 
 def SupPriceHHexpSup(scDict, Ctheta, Cbeta):
-    # Returns on-path LLsqz prices
+    # Returns on-path HHexpSup prices, if the off-path prices they account for are RetIR-valid
     b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
-    w1 = ((b**2) - b* (3 + 2*cS) + 2* (1 + cS + np.sqrt(-((-1 + b) ((-2 + b)*cS - (-1 + b)*(cS**2) +
+    w1 = ((b**2) - b* (3 + 2*cS) + 2* (1 + cS + np.sqrt(-1*((-1 + b)*((-2 + b)*cS - (-1 + b)*(cS**2) +
          2*((-2 + b)**2)* (1 + b)*Cbeta*(supRateHi - supRateLo))))))/((-2 + b)**2)
     w2 = w1
-    return max(w1, 0), max(w2, 0)
+    # Is the off-path price RetIR-valid?
+    radterm = np.sqrt((1 - 4*cS*(-1 + w1) + 4*(-1 + w1)*w1 +2*b*(1 + 2*cS - 2*w1)*(-1 + w2) -8*Cbeta*supRateHi +
+                    (b**2)*(1 + (-2 + w2)*w2 + 8*Cbeta*(supRateHi - supRateLo)) +8*Cbeta*supRateLo)/((-1 + (b**2))**2))
+    w1off = 0.5*(1 - b + b*w2 - (1 - (b**2))*radterm)
+    if RetUtil(b, w1off, w2, Ctheta, supRateLo, supRateHi) < 0:  # These off-path prices aren't possible
+        w1, w2 = SupPriceHHexpRet(scDict, Ctheta, Cbeta, tol=1E-8)
+    return w1, w2
+
 
 
 def CbetaLLFOCUB(scDict, Ctheta):
@@ -247,6 +254,128 @@ def CheckHHFOCLB(scDict, Ctheta, Cbeta):
         if Cbeta < Cbetaterm:
             retBool = False
     return retBool
+
+def CheckLLsqz(scDict, Ctheta, Cbeta):
+    # Returns True if LLsqz is valid for the given Ctheta/Cbeta combination
+    b, cS, supRateHi, supRateLo = scDict['b'], scDict['cSup'], scDict['supRateHi'], scDict['supRateLo']
+    # Initialize return value
+    retBool = True
+    # Get on-path prices
+    w1on = 1 - np.sqrt(-2*((1 + b)*Ctheta*(-1 +(supRateLo**2))))
+    if w1on < 0:  # Ctheta too large
+        retBool = False
+    # Only valid if LLFOC invalid
+    if retBool is True and Ctheta <= CthetaLLFOCUB(scDict):
+        retBool = False
+    # Check if suppliers have incentive to move using SupIC condition first
+    if retBool:
+        radterm = np.sqrt(-2*((1 + b)*Ctheta*(-1 + (supRateLo**2))))
+        Cbetaterm = (((-1 + cS)**2) - 2*((-2 + b)**2)*(1 + b)*Ctheta*(-1 + (supRateLo**2))-4*radterm+2*b*radterm +
+                     2*b*cS*radterm)/(8*(-1 + (b**2))*(supRateHi - supRateLo))
+        # Check that off-path retailer IR is met
+        w2off = 0.5*(1 + cS - b*np.sqrt(-2*((1 + b)*Ctheta*(-1 + (supRateLo**2)))))
+        retutil = RetUtil(b, w1on, w2off, Ctheta, supRateHi, supRateLo)
+        if Cbeta > Cbetaterm and retutil >= 0:  # Off-path move valid
+            retBool = False
+    # Check if RetIR price is preferred
+    if retBool:
+        radterm3 = np.sqrt((Ctheta*(-1 + b+2*supRateHi*supRateLo - (1 +b)*(supRateLo**2)))/(-1 + (b**2)))
+        CbetatermRetIR = (1/(2*(1 +b)*(supRateHi - supRateLo)))*(-2*b*(1 +b)*Ctheta-4*(1 + b)*Ctheta*(supRateHi -
+                            supRateLo) *supRateLo + 2*b*(1 + b)*Ctheta*(supRateLo**2) + np.sqrt(-2*((1 + b)*Ctheta*(-1+
+                            (supRateLo**2)))) - np.sqrt(2)*(1 + b)* radterm3 + np.sqrt(2)*(1 + b)*cS*radterm3 +
+                            2*b*(1 + b)*np.sqrt(-1*((1 + b)*Ctheta*(-1 + (supRateLo**2))))*radterm3)
+        if Cbeta > CbetatermRetIR:
+            retBool = False
+    return retBool
+
+def CheckLHsqz(scDict, Ctheta, Cbeta):
+    # Returns True if LHsqz is valid for the given Ctheta/Cbeta combination
+    b, cS, supRateHi, supRateLo = scDict['b'], scDict['cSup'], scDict['supRateHi'], scDict['supRateLo']
+    # Initialize return value
+    retBool = True
+    # Get on-path prices
+    w1on, w2on = SupPriceLHsqz(scDict, Ctheta)
+    LHsqzExt = False
+    if w2on == cS:  # We're in LHsqzExt
+        LHsqzExt = True
+    if w1on < 0:  # Invalid
+        retBool = False
+    # Check if S1 has incentive to move to H
+    if not LHsqzExt:
+        radterm1 = np.sqrt((-1 + (b**2))*(1 + (-2 + cS)*cS -4*(-4 + 3*(b**2))*Ctheta*(-1 + supRateHi*supRateLo)))
+        CbetaUB = (1 / (4*((4 - 3*(b**2))**2)*(-1 + (b**2))*(supRateHi - supRateLo)))*(-8*b*(-1 +
+                    cS)*cS - 6*(b**8)*Ctheta*(-1 +supRateHi*supRateLo) +(b**6)*(1 + (-2 + cS)*cS +
+                    62*Ctheta*(-1 +supRateHi*supRateLo)) +(b**5)*(-1 + cS)*(-3 - 3*cS + radterm1) -
+                    16*(-8*Ctheta + 8*Ctheta*supRateHi*supRateLo + radterm1) - 2*(b**3)*(-1 + cS)*(-2-5*cS +
+                    2*radterm1) - 3*(b**4)*(72*Ctheta*(-1 +supRateHi*supRateLo) + (1 + cS)*radterm1) +
+                    4*(b**2)*(72*Ctheta*(-1 + supRateHi*supRateLo) + (4 + cS)*radterm1))
+    if LHsqzExt:
+        radterm1 = np.sqrt((1 + (-2 + cS)*cS - 4*Ctheta + 4*Ctheta*supRateHi*supRateLo)/(-1 + (b**2)))
+        CbetaUB = (3+3*(-2 + cS)*cS + 16*Ctheta*(-1 + supRateHi*supRateLo) + 4* radterm1 + 4*(b**2)*(-1+cS)*radterm1 +
+                   b*(5 +16*Ctheta*(-1 + supRateHi*supRateLo) +cS*(-10 + 5*cS +4*radterm1)))/(8*(1 +
+                   b)*(supRateHi - supRateLo))
+    if Cbeta >= CbetaUB:
+        retBool = False
+    # Check if S2 has incentive to move using SupIC condition first
+    if retBool and not LHsqzExt:
+        radterm2 = np.sqrt((-1 + (b**2))* (1 + (-2 + cS)*cS -4* (-4 + 3* (b**2))* Ctheta* (-1 + supRateHi*supRateLo)))
+        CbetaLB1 = (cS*(8 - 8*(b**2) - 4*cS + 5*(b**2)*cS -4*b*radterm2))/(8*(4 - 7*(b**2) +
+                        3*(b**4))*(supRateHi - supRateLo))
+        # Check that off-path retailer IR is met
+        radterm3 = np.sqrt((-1 + (b**2))*(1 + (-2 + cS)*cS - 4*(-4+3*(b**2))*Ctheta*(-1 + supRateHi*supRateLo)))
+        w2off = (1/6)*(4 - (4*(-1 + cS))/(-4 + 3*(b**2)) - cS + (6*b*radterm3)/(-4 +3* (b**2)))
+        retutil = RetUtil(b, w1on, w2off, Ctheta, supRateLo, supRateLo)
+        if Cbeta <= CbetaLB1 and retutil >= 0:  # Off-path move valid
+            retBool = False
+    # Check if RetIR price is preferred
+    if retBool and not LHsqzExt:
+        radterm4 = np.sqrt((-1 + (b**2))*(1 + (-2 + cS)*cS - 4*(-4+3*(b**2))*Ctheta*(-1 + supRateHi*supRateLo)))
+        CbetaLB2 = (1/(2*(-1 +(b**2))*(supRateHi - supRateLo)))*(((2*(-1 + cS) +b*(2*b -2*b*cS +radterm4))**2)/((4 -
+                    3*(b**2))**2) + (-1 + (b**2))* np.sqrt(((1/(((4 - 3*(b**2))**2)*(-1 + (b**2)))))*(-4 -
+                    4*(-2 + cS)*cS +64*Ctheta*supRateLo*(-1*supRateHi + supRateLo) +12*(b**4)*Ctheta*(1 -
+                    4*supRateHi*supRateLo +3*(supRateLo**2)) -4* b* (-1 +cS)*radterm4 + (b**2)*(5 + 5*(-2 + cS)*cS +
+                    16*Ctheta*(-1 +7*supRateHi*supRateLo - 6*(supRateLo**2)))))*((4 - 4*cS)/(-12 + 9*(b**2)) +
+                    (4 - cS)/3 + (2*b*radterm4)/(-4 +3*(b**2)) + (-1 + (b**2))* np.sqrt(((1/(((4 - 3*(b**2))**2)*(-1 +
+                    (b**2)))))*(-4 -4*(-2 + cS)*cS +64*Ctheta*supRateLo*(-1*supRateHi + supRateLo) +
+                    12*(b**4)*Ctheta*(1 -4*supRateHi*supRateLo +3*(supRateLo**2)) -4* b* (-1 +cS)*radterm4 +
+                    (b**2)*(5 + 5*(-2 + cS)*cS +16*Ctheta*(-1 +7*supRateHi*supRateLo - 6*(supRateLo**2)))))))
+        if Cbeta <= CbetaLB2:
+            retBool = False
+    # Now for LHsqzExt
+    if retBool and LHsqzExt:
+        radterm5 = np.sqrt((1 + (-2 + cS)*cS + 4*Ctheta*(-1 + supRateHi*supRateLo))/(-1 + (b**2)))
+        CbetaLB3 = -1*(((1 + b*(-1*radterm5 + b* (-1 + cS +b*radterm5)))**2)/(8*(-1 + (b**2))*(supRateHi - supRateLo)))
+        # Check that off-path retailer IR is met
+        radterm6 = np.sqrt((1 + (-2 + cS)*cS +4*Ctheta*(-1 + supRateHi*supRateLo))/(-1 +(b**2)))
+        w2off = 0.5*(1 +(b**2)*(-1 + cS) - (b - (b**3))*radterm6)
+        retutil = RetUtil(b, w1on, w2off, Ctheta, supRateLo, supRateLo)
+        if Cbeta <= CbetaLB3 and retutil >= 0:  # Off-path move valid
+            retBool = False
+    # Check if RetIR price is preferred
+    if retBool and LHsqzExt:
+        radterm7 = np.sqrt((1 + (-2 + cS)*cS +4*Ctheta*(-1 +supRateHi*supRateLo))/(-1 + (b**2)))
+        radterm8 = np.sqrt((-1 - (-2 + cS)*cS +4*Ctheta*supRateLo*(-1*supRateHi + supRateLo)+2*(b**2)*(1 + (-2+cS)*cS +
+                    2*Ctheta*(-1+supRateHi*supRateLo))-2*b*(-1+cS)*radterm7+2*(b**3)*(-1+cS)*radterm7)/(-1 + (b**2)))
+        CbetaLB4 = (1/(2*(supRateHi - supRateLo)))*radterm8*(1 - radterm8 +b*(-1*radterm7 + b*(-1 + cS +
+                    b*radterm7 + radterm8)))
+        if Cbeta <= CbetaLB4:
+            retBool = False
+
+    return retBool
+
+def CheckHHexp(scDict, Ctheta, Cbeta):
+    # Returns True if HHexp is valid for the given Ctheta/Cbeta combination
+    b, cS, supRateHi, supRateLo = scDict['b'], scDict['cSup'], scDict['supRateHi'], scDict['supRateLo']
+    # Initialize return value
+    retBool = True
+    # Get RetIR-valid SupIC HHexp prices
+    w1on, w2on = SupPriceHHexpSup(scDict, Ctheta, Cbeta)
+    if w1on < cS or np.isnan(w1on):  # Only need to check if these prices are SupIC-valid; existence otherwise indicates HHexp is possible
+        retBool = False
+    return retBool
+
+
+
 
 # Todo: OLD BOUNDS LISTED BELOW, NEED TO VERIFY
 def CthetaLHFOCLB(scDict, step=1/10000):
@@ -415,31 +544,6 @@ def CthetaHHexpLB(scDict, step=1/10000):
                 currLB = currCtheta
     return currLB
 
-def CthetaLLsqzUB(scDict, step=1/10000, UBmax=10):
-    # LL sqz UB in Ctheta
-    b, cS1, cS2, supRateLo, a = scDict['b'], scDict['cSup1'], scDict['cSup2'], scDict['supRateLo'], scDict['a']
-    # We do three checks under each set of prices for given Ctheta: retailer IR, S2's off-path, S1's LL on-path
-    LLFOCUB = CthetaLLFOCUB(scDict)
-    CthetaVec = np.arange(LLFOCUB, UBmax, step)
-    currLB = CthetaVec[0]  # Move up from this
-    found = False
-    for Cthetaind, currCtheta in enumerate(CthetaVec):
-        if not found:
-            w1on, w2on = SupPriceLLsqz5(scDict, currCtheta)
-            currS1util, currS2util = SupUtil(q1Opt(w1on, w2on, b, a),w1on,0), SupUtil(q2Opt(w1on,w2on,b, a), w2on, 0)
-            # Get off-path prices
-            w1off, w2off  = 0.5*(1 - a* b + cS1 + b* w2on), 0.5*(a + cS2 + b*(-1 + w1on))
-            offS1util = SupUtil(q1Opt(w1off, w2on, b, a), w1off, cS1)
-            offS2util = SupUtil(q2Opt(w1on, w2off, b, a), w2off, cS2)
-            if currS1util < offS1util:
-                found = True
-            if currS2util < offS2util:
-                found = True
-            # Update currLB if made it through checks
-            if not found:
-                currLB = currCtheta
-    return currLB
-
 def GetEqPriceList(scDict, Ctheta, Cbeta):
     # Returns a list of 8 sets of equilibrium prices
     LL1, LL2 = SupPriceLL(scDict, Ctheta)
@@ -477,8 +581,14 @@ def CthetaCbetaMatsForPlot(numpts, Ctheta_max, Cbeta_max, scDict):
             # priceList = GetEqPriceList(scDict, currCtheta, currCbeta)
             if currCtheta < CthLLUB and currCbeta < CbeLLUB:  # LLFOC
                 eqStrat_matList[0, currCthetaind, currCbetaind] = 1
+            if CheckLLsqz(scDict, currCtheta, currCbeta):
+                eqStrat_matList[1, currCthetaind, currCbetaind] = 1
             if CheckLHFOCLB(scDict, currCtheta, currCbeta) and currCtheta < CthLHUB and currCbeta < CbeLHUB:  # LHFOC
                 eqStrat_matList[3, currCthetaind, currCbetaind] = 1
+            if CheckLHsqz(scDict, currCtheta, currCbeta) and currCtheta >= CthLHUB:  # LHsqz
+                eqStrat_matList[4, currCthetaind, currCbetaind] = 1
+            if CheckHHexp(scDict, currCtheta, currCbeta) and currCbeta < CbeHHLB:  # HHexp
+                eqStrat_matList[5, currCthetaind, currCbetaind] = 1
             if currCbeta >= CbeHHLB or CheckHHFOCLB(scDict, currCtheta, currCbeta):  # HHFOC
                 eqStrat_matList[6, currCthetaind, currCbetaind] = 1
 
@@ -522,10 +632,10 @@ def SocWelEqMatsForPlot(numpts, uL_min, uL_max, cSup_max, scDict):
 #######################
 # EQUILIBRIUM PLOTS
 #######################
-b, cSup, supRateLo, supRateHi = 0.6, 0.3, 0.8, 1.0
+b, cSup, supRateLo, supRateHi = 0.6, 0.2, 0.8, 1.0
 scDict = {'b': b, 'cSup': cSup, 'supRateLo': supRateLo, 'supRateHi': supRateHi}
 numpts = 50
-CthetaMax, CbetaMax = 1.2, CbetaHHFOCLB(scDict, 0)*1.2
+CthetaMax, CbetaMax = 1.2, 1.2*CbetaHHFOCLB(scDict, 0)
 
 eqMats = CthetaCbetaMatsForPlot(numpts, CthetaMax, CbetaMax, scDict)
 
