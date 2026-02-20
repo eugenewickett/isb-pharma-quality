@@ -163,7 +163,7 @@ def SupPriceHHexpRet(scDict, Ctheta, Cbeta, tol=1E-8):
     return root[0], root[1]
 
 def SupPriceLHexpSup(scDict, Ctheta, Cbeta):
-    # Returns on-path LHsqz prices, if the off-path prices accounted for are RetIR-valid
+    # Returns on-path LHexp prices, if the off-path prices accounted for are RetIR-valid
     b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
     w1 = (2*(-1 + b)*cS + (cS**2) - 8*(-1 + (b**2))*Cbeta*(supRateHi - supRateLo))/(2*b*cS)
     w2 = (3*cS)/4 - (2*(-1 + (b**2))*Cbeta*(supRateHi - supRateLo))/cS
@@ -470,6 +470,66 @@ def CheckLHexp(scDict, Ctheta, Cbeta):
             retBool = False
     return retBool
 
+def CthetaLLsqzUBForNoCbeta(scDict, Xincr = 0.001):
+    # Returns LLsqz UB on X for Y=0
+    ub = CthetaLLFOCUB(scDict)  # Initialize
+    bdFound = False
+    while not bdFound:
+        currub = ub + Xincr
+        if CheckLLsqz(scDict, currub, 0):
+            ub = currub
+        else:
+            bdFound = True
+    return ub
+
+def CthetaLHsqzUBForNoCbeta(scDict, Xincr = 0.001):
+    # Returns LHsqz UB on X for Y=0
+    ub = CthetaLHFOCUB(scDict)  # Initialize
+    bdFound = False
+    while not bdFound:
+        currub = ub + Xincr
+        if CheckLHsqz(scDict, currub, 0):
+            ub = currub
+        else:
+            bdFound = True
+    return ub
+
+def CthetaLHFOCLBForNoCbeta(scDict, Xincr = 0.001):
+    # Returns LHsqz UB on X for Y=0
+    lb = CthetaLHFOCUB(scDict)  # Initialize
+    bdFound = False
+    while not bdFound:
+        currlb = lb - Xincr
+        if CheckLHFOCLB(scDict, currlb, 0):
+            lb = currlb
+        else:
+            bdFound = True
+    return lb
+
+def CthetaLHexpLBForNoCbeta(scDict, Xincr = 0.001):
+    # Returns LHsqz UB on X for Y=0
+    lb = CthetaLHFOCLBForNoCbeta(scDict)  # Initialize
+    bdFound = False
+    while not bdFound:
+        currlb = lb - Xincr
+        if CheckLHexp(scDict, currlb, 0):
+            lb = currlb
+        else:
+            bdFound = True
+    return lb
+
+def CthetaHHexpLBForNoCbeta(scDict, Xincr = 0.001):
+    # Returns LHsqz UB on X for Y=0
+    lb = CthetaHHFOCLBForNoCbeta(scDict)  # Initialize
+    bdFound = False
+    while not bdFound:
+        currlb = lb - Xincr
+        if CheckHHexp(scDict, currlb, 0):
+            lb = currlb
+        else:
+            bdFound = True
+    return lb
+
 def GetEqPriceList(scDict, Ctheta, Cbeta):
     # Returns a list of 8 sets of equilibrium prices
     LL1, LL2 = SupPriceLL(scDict, Ctheta)
@@ -641,7 +701,7 @@ def SocWelEqMatsForPlotIgnorePens(numpts, Ctheta_max, Cbeta_max, uH, uL, scDict)
 #######################
 # EQUILIBRIUM PLOTS
 #######################
-b, cSup, supRateLo, supRateHi = 0.6, 0.1, 0.8, 1.0
+b, cSup, supRateLo, supRateHi = 0.9, 0.05, 0.8, 1.0
 scDict = {'b': b, 'cSup': cSup, 'supRateLo': supRateLo, 'supRateHi': supRateHi}
 numpts = 100
 
@@ -671,31 +731,31 @@ for eqind in range(len(labels)):
     imlist.append(im)
 
 # Fill in any non-equilibria regions
-Cthdist, Cbedist = (Ctheta_max)/numpts, (Cbeta_max)/numpts
-for i in range(CthetaVec.shape[0]):
-    for j in range(CbetaVec.shape[0]):
-        if np.nansum(eqMats[:, i, j])==0:  # No equilibria here
-            ax.add_patch(matplotlib.patches.Rectangle((CthetaVec[i],CbetaVec[j]),Cthdist,Cbedist,
-               hatch='/////////',fill=False,linewidth=0,snap=False))
+# Cthdist, Cbedist = (Ctheta_max)/numpts, (Cbeta_max)/numpts
+# for i in range(CthetaVec.shape[0]):
+#     for j in range(CbetaVec.shape[0]):
+#         if np.nansum(eqMats[:, i, j])==0:  # No equilibria here
+#             ax.add_patch(matplotlib.patches.Rectangle((CthetaVec[i],CbetaVec[j]),Cthdist,Cbedist,
+#                hatch='/////////',fill=False,linewidth=0,snap=False))
 
 legwidth = 20
 wraplabels = ['\n'.join(textwrap.wrap(labels[i], width=legwidth)) for i in range(len(labels))]
-patches = [mpatches.Patch(color=eqcolors[i], label=wraplabels[i], alpha=alval) for i in range(len(eqcolors))] +\
-          [mpatches.Patch(hatch=r'/////////',fill=False,linewidth=0,snap=False,label='1-sup. eq.')]
+patches = [mpatches.Patch(color=eqcolors[i], label=wraplabels[i], alpha=alval) for i in range(len(eqcolors))]
+          # +[mpatches.Patch(hatch=r'/////////',fill=False,linewidth=0,snap=False,label='1-sup. eq.')]
 
 # put those patched as legend-handles into the legend
 ax.legend(handles=patches, bbox_to_anchor=(1.3, 1.0), loc='upper right', borderaxespad=0.1, fontsize=8)
 ax.set_xbound(0, Ctheta_max)
 ax.set_ybound(0, Cbeta_max)
 ax.set_box_aspect(1)
-plt.xlabel(r'$C_{\theta}^R$', fontsize=14)
-plt.ylabel(r'$C_{\beta}^S$', fontsize=14, rotation=0, labelpad=14)
+plt.xlabel(r'$X$', fontsize=14)
+plt.ylabel(r'$Y$', fontsize=14, rotation=0, labelpad=14)
 plt.show()
 
 #######################
 # SOCIAL WELFARE PLOT
 #######################
-b, cSup, supRateLo, supRateHi = 0.9, 0.1, 0.8, 1.0
+b, cSup, supRateLo, supRateHi = 0.9, 0.25, 0.8, 1.0
 scDict = {'b': b, 'cSup': cSup, 'supRateLo': supRateLo, 'supRateHi': supRateHi}
 numpts = 100
 Ctheta_max, Cbeta_max = 1.2*CthetaHHFOCLBForNoCbeta(scDict), 1.2*CbetaHHFOCLB(scDict, 0)
@@ -787,55 +847,44 @@ plt.xlabel(r'$C_{\theta}^R$', fontsize=14)
 plt.ylabel(r'$C_{\beta}^S$', fontsize=14, rotation=0, labelpad=14)
 plt.show()
 
-
-
-
-
-# TODO: OLD PLOTTING SECTIONS BELOW HERE
-
 #######################
 # WHOLESALE PRICE PLOTS
 #######################
 # for b=[0.6, 0.9]
-b, cSup, supRateLo, supRateHi = 0.75, 0.3, 0.8, 1.0
+b, cSup, supRateLo, supRateHi = 0.9, 0.05, 0.8, 1.0
 scDict = {'b': b, 'cSup': cSup, 'supRateLo': supRateLo, 'supRateHi': supRateHi}
 
-CthLLUB, CthLHFOCLB, CthLLsqzUB = CthetaLLFOCUB(scDict), CthetaLHFOCLB(scDict), CthetaLLsqzUB(scDict)
-CthHHLB, devS = CthetaHHFOCLB(scDict)
-CthLHFOCUB, CthLHsqzUB, CthLHexpLB = CthetaLHFOCUB(scDict), CthetaLHsqzUB(scDict), CthetaLHexpLB(scDict)
-CthHHexpAdjLB, CthHHexpLB = CthetaHHexpAdjLB(scDict), CthetaHHexpLB(scDict)
-CthetaMax = 1.2*CthHHLB
-CthetaVec = np.arange(0, CthetaMax, 0.001)
-LLprices = np.empty((CthetaVec.shape[0], 2))
+XLLUB, XLHUB, XHHLB = CthetaLLFOCUB(scDict), CthetaLHFOCUB(scDict), CthetaHHFOCLBForNoCbeta(scDict)
+XLHLB, XLHexpLB = CthetaLHFOCLBForNoCbeta(scDict), CthetaLHexpLBForNoCbeta(scDict)
+XLHsqzUB, XHHexpLB = CthetaLHsqzUBForNoCbeta(scDict), CthetaHHexpLBForNoCbeta(scDict)
+XLLsqzUB = CthetaLLsqzUBForNoCbeta(scDict)
+Xmax = 1.2*XHHLB
+XVec = np.arange(0, Xmax, 0.001)
+LLprices = np.empty((XVec.shape[0], 2))
 LLprices[:] = np.nan
 HHprices, HHexpprices, LHexpprices, LHFOCprices = LLprices.copy(), LLprices.copy(), LLprices.copy(), LLprices.copy()
-LHsqzprices, LHsqztwoprices, LLsqzprices = LLprices.copy(), LLprices.copy(), LLprices.copy()
+LHsqzprices, LLsqzprices = LLprices.copy(), LLprices.copy()
 # Store prices
-for Cthetaind in range(CthetaVec.shape[0]):
-    currCtheta = CthetaVec[Cthetaind]
-    if currCtheta <= CthLLUB:  # LL
-        LLprices[Cthetaind, :] = SupPriceLL(scDict, currCtheta)
-    if currCtheta > CthLLUB and currCtheta <= CthLLsqzUB:  # LL sqz
-        LLsqzprices[Cthetaind, :] = SupPriceLLsqz5(scDict, currCtheta)
-    if currCtheta > CthLHexpLB and currCtheta < CthLHFOCLB:  # LHexp
-        LHexpprices[Cthetaind, :] = SupPriceLHexp(scDict, currCtheta)
-    if currCtheta >= CthLHFOCLB and currCtheta <= CthLHFOCUB:  # LHFOC
-        LHFOCprices[Cthetaind, :] = SupPriceLHFOC(scDict, currCtheta)
-    if currCtheta > CthLHFOCUB and currCtheta <= CthLHsqzUB:  # LHsqz
-        LHsqzprices[Cthetaind, :] = SupPriceLHsqz(scDict, currCtheta)
-    if currCtheta >= CthHHexpLB and currCtheta < CthHHexpAdjLB:  # HHexp
-        HHexpprices[Cthetaind, :] = SupPriceHHexp(scDict, currCtheta)
-    if currCtheta >= CthHHexpAdjLB and currCtheta < CthHHLB:  # HHexpAdj
-        if devS == 1:
-            HHexpprices[Cthetaind, :] = SupPriceHHexp1(scDict, currCtheta)
-        elif devS == 2:
-            HHexpprices[Cthetaind, :] = SupPriceHHexp2(scDict, currCtheta)
-    if currCtheta >= CthHHLB:
-        HHprices[Cthetaind, :] = SupPriceHH(scDict, currCtheta)
+for Xind in range(XVec.shape[0]):
+    currX = XVec[Xind]
+    if currX <= XLLUB:  # LL
+        LLprices[Xind, :] = SupPriceLL(scDict, currX)
+    if currX > XLLUB and currX <= XLLsqzUB:  # LL sqz
+        LLsqzprices[Xind, :] = SupPriceLLsqz(scDict, currX)
+    if currX > XLHexpLB and currX < XLHLB:  # LHexp
+        LHexpprices[Xind, :] = SupPriceLHexpSup(scDict, currX, 0)
+    if currX >= XLHLB and currX <= XLHUB:  # LHFOC
+        LHFOCprices[Xind, :] = SupPriceLHFOC(scDict, currX)
+    if currX > XLHUB and currX <= XLHsqzUB:  # LHsqz
+        LHsqzprices[Xind, :] = SupPriceLHsqz(scDict, currX)
+    if currX >= XHHexpLB and currX < XHHLB:  # HHexp
+        HHexpprices[Xind, :] = SupPriceHHexpSup(scDict, currX, 0)
+    if currX >= XHHLB:
+        HHprices[Xind, :] = SupPriceHH(scDict, currX)
 
 fig = plt.figure()
-fig.suptitle(r'$b=$'+str(b)+', ' +r'$c_1=$'+str(cSup1)+', '+r'$c_2=$'+str(cSup2)+', '+r'$L=$'+str(supRateLo)+
-             ', '+r'$a=$'+str(a), fontsize=18, fontweight='bold')
+fig.suptitle(r'$b=$'+str(b)+', ' +r'$c_S=$'+str(cSup)+', '+r'$L=$'+str(supRateLo)+', '+r'$Y=$'+str(0.0),
+             fontsize=18, fontweight='bold')
 
 al = 0.8
 LLonecol, LLtwocol, HHonecol, HHtwocol = 'red', 'deeppink', 'indigo', 'mediumorchid'
@@ -844,26 +893,33 @@ LHonecols = ['limegreen', 'seagreen', 'darkgreen']
 LHtwocols = ['cornflowerblue', 'blue', 'midnightblue']
 lnwd = 5
 
-plt.plot(CthetaVec, LLprices[:, 0], linewidth=lnwd, linestyle='dashed', color=LLonecol, alpha=al)
-plt.plot(CthetaVec, LLprices[:, 1], linewidth=lnwd, color=LLtwocol, alpha=al)
-plt.plot(CthetaVec, LLsqzprices[:, 0], linewidth=lnwd, linestyle='dashed', color=LLsqzonecol, alpha=al)
-plt.plot(CthetaVec, LLsqzprices[:, 1], linewidth=lnwd, color=LLsqztwocol, alpha=al)
-plt.plot(CthetaVec, LHexpprices[:, 0], linewidth=lnwd, linestyle='dashed', color=LHtwocols[0], alpha=al)
-plt.plot(CthetaVec, LHexpprices[:, 1], linewidth=lnwd, color=LHonecols[0], alpha=al)
-plt.plot(CthetaVec, LHFOCprices[:, 0], linewidth=lnwd, linestyle='dashed', color=LHtwocols[1], alpha=al)
-plt.plot(CthetaVec, LHFOCprices[:, 1], linewidth=lnwd, color=LHonecols[1], alpha=al)
-plt.plot(CthetaVec, LHsqzprices[:, 0], linewidth=lnwd, linestyle='dashed', color=LHtwocols[2], alpha=al)
-plt.plot(CthetaVec, LHsqzprices[:, 1], linewidth=lnwd, color=LHonecols[2], alpha=al)
-plt.plot(CthetaVec, HHexpprices[:, 0], linewidth=lnwd, linestyle='dashed', color=HHexponecol, alpha=al)
-plt.plot(CthetaVec, HHexpprices[:, 1], linewidth=lnwd, color=HHexptwocol, alpha=al)
-plt.plot(CthetaVec, HHprices[:, 0], linewidth=lnwd, linestyle='dashed', color=HHonecol, alpha=al)
-plt.plot(CthetaVec, HHprices[:, 1], linewidth=lnwd, color=HHtwocol, alpha=al)
-plt.ylim(0, 1.0)
-plt.xlim(0, CthetaMax)
-plt.xlabel(r'$C_{\theta}$', fontsize=14)
+plt.plot(XVec, LLprices[:, 0], linewidth=lnwd, color=LLonecol, alpha=al)
+# plt.plot(XVec, LLprices[:, 1], linewidth=lnwd, color=LLtwocol, alpha=al)
+plt.plot(XVec, LLsqzprices[:, 0], linewidth=lnwd, color=LLsqzonecol, alpha=al)
+# plt.plot(XVec, LLsqzprices[:, 1], linewidth=lnwd, color=LLsqztwocol, alpha=al)
+plt.plot(XVec, HHexpprices[:, 0], linewidth=lnwd, color=HHtwocol, alpha=al)
+plt.plot(XVec, HHprices[:, 0], linewidth=lnwd, color=HHonecol, alpha=al)
+plt.plot(XVec, LHexpprices[:, 0], linewidth=lnwd, linestyle='dashed', color=LHtwocols[0], alpha=al)
+plt.plot(XVec, LHexpprices[:, 1], linewidth=lnwd, color=LHonecols[0], alpha=al)
+plt.plot(XVec, LHFOCprices[:, 0], linewidth=lnwd, linestyle='dashed', color=LHtwocols[1], alpha=al)
+plt.plot(XVec, LHFOCprices[:, 1], linewidth=lnwd, color=LHonecols[1], alpha=al)
+plt.plot(XVec, LHsqzprices[:, 0], linewidth=lnwd, linestyle='dashed', color=LHtwocols[2], alpha=al)
+plt.plot(XVec, LHsqzprices[:, 1], linewidth=lnwd, color=LHonecols[2], alpha=al)
+plt.ylim(0, 0.32)
+# plt.ylim(0, np.max((np.nanmax(HHprices),np.nanmax(HHexpprices)))*1.2)
+plt.xlim(0, Xmax)
+plt.xlabel(r'$X$', fontsize=14)
 plt.ylabel(r'$w$', fontsize=14, rotation=0, labelpad=14)
 plt.show()
 
+
+
+
+
+
+
+
+# TODO: OLD PLOTTING SECTIONS BELOW HERE
 #####################
 # Social welfare plot vs prices
 #####################
@@ -1015,97 +1071,6 @@ ax.set_ybound(0, cSupMax)
 ax.set_box_aspect(1)
 plt.xlabel(r'$u_{L}$', fontsize=14)
 plt.ylabel(r'$c_S$', fontsize=14, rotation=0, labelpad=14)
-plt.show()
-
-
-#####################
-# Equilibrium plots: Delta cS
-#####################
-b, cSup1, cSup2, supRateLo, a = 0.6, 0.151, 0.15, 0.75, 1.3
-uH, uL, priceconst = 1, -1, 1.0
-scDict = {'b': b, 'cSup1': cSup1, 'cSup2': cSup2, 'supRateLo': supRateLo, 'a': a}
-
-numpts, CthetaMax, cSupDeltaMax = 50, 1.5, 0.5
-alval = 0.7
-
-eqStrat_matList = LthetaCsupEqMatsForPlot(numpts, CthetaMax, cSupDeltaMax, scDict)
-# Fill holes
-# for csupind in range(eqStrat_matList.shape[1]):
-#     for cthetaind in range(eqStrat_matList.shape[2]):
-#         if np.nansum(eqStrat_matList[:,csupind,cthetaind]) == 0:
-#             eqStrat_matList[4, csupind, cthetaind] = 1
-
-fig = plt.figure()
-fig.suptitle(r'$b=$'+str(b)+', '+r'$L=$'+str(supRateLo)+', '+r'$c^S_2=$'+str(cSup2)+', '+r'$a=$'+str(a),
-             fontsize=18, fontweight='bold')
-ax = fig.add_subplot(111)
-
-eqcolors = ['#cf0234', 'deeppink', '#021bf9', '#0d75f8', '#82cafc', '#5ca904', '#0b4008']
-labels = ['LL', 'LLsqz', 'LHexp', 'LHFOC', 'LHsqz', 'HHsqz', 'HH']
-
-imlist = []
-for eqind in range(len(labels)):
-    mycmap = matplotlib.colors.ListedColormap(['white', eqcolors[eqind]], name='from_list', N=None)
-    im = ax.imshow(eqStrat_matList[eqind], vmin=0, vmax=1, aspect='auto',
-                            extent=(0, CthetaMax, 0, cSupDeltaMax),
-                            origin="lower", cmap=mycmap, alpha=alval)
-    imlist.append(im)
-
-legwidth = 20
-wraplabels = ['\n'.join(textwrap.wrap(labels[i], width=legwidth)) for i in range(len(labels))]
-patches = [mpatches.Patch(color=eqcolors[i], edgecolor='black', label=wraplabels[i], alpha=alval) for i in range(len(eqcolors))]
-# put those patched as legend-handles into the legend
-ax.legend(handles=patches, bbox_to_anchor=(1.3, 1.0), loc='upper right', borderaxespad=0.1, fontsize=8)
-ax.set_xbound(0, CthetaMax)
-ax.set_ybound(0, cSupDeltaMax)
-ax.set_box_aspect(1)
-plt.xlabel(r'$C_{\theta}$', fontsize=14)
-plt.ylabel(r'$\Delta c^S_1$', fontsize=14, rotation=0, labelpad=14)
-plt.show()
-
-#####################
-# Equilibrium plots: Delta a
-#####################
-b, cSup1, cSup2, supRateLo, a = 0.6, 0.3, 0.1, 0.75, 1.3
-uH, uL, priceconst = 1, -1, 1.0
-scDict = {'b': b, 'cSup1': cSup1, 'cSup2': cSup2, 'supRateLo': supRateLo, 'a': a}
-
-numpts, CthetaMax, aDeltaMax = 50, 1.5, 0.5
-alval = 0.7
-
-eqStrat_matList = LthetaAdemEqMatsForPlot(numpts, CthetaMax, aDeltaMax, scDict)
-# Fill holes
-# for csupind in range(eqStrat_matList.shape[1]):
-#     for cthetaind in range(eqStrat_matList.shape[2]):
-#         if np.nansum(eqStrat_matList[:,csupind,cthetaind]) == 0:
-#             eqStrat_matList[4, csupind, cthetaind] = 1
-
-fig = plt.figure()
-fig.suptitle(r'$b=$'+str(b)+', '+r'$L=$'+str(supRateLo)+', '+r'$c^S_1=$'+str(cSup1)+', '+r'$c^S_2=$'+str(cSup2),
-             fontsize=18, fontweight='bold')
-ax = fig.add_subplot(111)
-
-eqcolors = ['#cf0234', 'deeppink', '#021bf9', '#0d75f8', '#82cafc', '#5ca904', '#0b4008']
-labels = ['LL', 'LLsqz', 'LHexp', 'LHFOC', 'LHsqz', 'HHsqz', 'HH']
-
-imlist = []
-for eqind in range(len(labels)):
-    mycmap = matplotlib.colors.ListedColormap(['white', eqcolors[eqind]], name='from_list', N=None)
-    im = ax.imshow(eqStrat_matList[eqind], vmin=0, vmax=1, aspect='auto',
-                            extent=(0, CthetaMax, 0, aDeltaMax),
-                            origin="lower", cmap=mycmap, alpha=alval)
-    imlist.append(im)
-
-legwidth = 20
-wraplabels = ['\n'.join(textwrap.wrap(labels[i], width=legwidth)) for i in range(len(labels))]
-patches = [mpatches.Patch(color=eqcolors[i], edgecolor='black', label=wraplabels[i], alpha=alval) for i in range(len(eqcolors))]
-# put those patched as legend-handles into the legend
-ax.legend(handles=patches, bbox_to_anchor=(1.3, 1.0), loc='upper right', borderaxespad=0.1, fontsize=8)
-ax.set_xbound(0, CthetaMax)
-ax.set_ybound(0, aDeltaMax)
-ax.set_box_aspect(1)
-plt.xlabel(r'$C_{\theta}$', fontsize=14)
-plt.ylabel(r'$\Delta a$', fontsize=14, rotation=0, labelpad=14)
 plt.show()
 
 #####################
@@ -1312,193 +1277,58 @@ plt.xlabel(r'$C_{\theta}$', fontsize=14)
 plt.ylabel(r'$U^R$', fontsize=14, rotation=0, labelpad=14)
 plt.show()
 
+#####################
+# What b/cS give us 1-sup. eq.?
+#####################
+bVec, cSupVec = np.arange(0.01, 1.00, 1/20), np.arange(0.01, 0.51, 0.5/20)
 
-#############################
-# SP friction threshold plot
-#############################
-# for b=[0.5,0.8]
-b, cSup, supRateLo = 0.5, 0.2, 0.9
-b1, b2 = 0.5, 0.8
-cSupMax, alMax = 0.55, 1.0
-scDict1 = {'b': b1, 'cSup': cSup, 'supRateLo': supRateLo}
-scDict2 = {'b': b2, 'cSup': cSup, 'supRateLo': supRateLo}
-cSupVec = np.arange(0.001, cSupMax, 0.005)
-alVec = np.arange(0.001, alMax, 0.005)
-yvec1, yvec2 = [], []
+storeMat = np.zeros((bVec.shape[0], cSupVec.shape[0]))
+for currbInd, currb in enumerate(bVec):
+    for currcSInd, currcS in enumerate(cSupVec):
+        print('b,cS='+str(currb)+','+str(currcS))
+        b, cSup, supRateLo, supRateHi = currb, currcS, 0.8, 1.0
+        scDict = {'b': b, 'cSup': cSup, 'supRateLo': supRateLo, 'supRateHi': supRateHi}
+        numpts = 100
 
-cSupBB1 = cSupBarBar(scDict1['b'])
-cSupBB2 = cSupBarBar(scDict2['b'])
+        Ctheta_max, Cbeta_max = 1.2*CthetaHHFOCLBForNoCbeta(scDict), 1.2*CbetaHHFOCLB(scDict, 0)
 
-for currcSup in cSupVec:
-    currdict1, currdict2 = scDict1.copy(), scDict2.copy()
-    currdict1['cSup'] = currcSup
-    currdict2['cSup'] = currcSup
-    cSupHHsqzBound1 = GetCritcSupHHsqz(currdict1)
-    cSupHHsqzBound2 = GetCritcSupHHsqz(currdict2)
-    if currcSup > cSupHHsqzBound1 and currcSup < cSupBB1:
-        yvec1.append(SPfrictThreshHHsqz(currdict1))
-    elif currcSup < cSupBB1:
-        yvec1.append(SPfrictThresh(currdict1))
-    else:
-        yvec1.append(np.nan)
-    if currcSup > cSupHHsqzBound2 and currcSup < cSupBB2:
-        yvec2.append(SPfrictThreshHHsqz(currdict2))
-    elif currcSup < cSupBB2:
-        yvec2.append(SPfrictThresh(currdict2))
-    else:
-        yvec2.append(np.nan)
+        CthetaVec = np.arange(0, Ctheta_max, (Ctheta_max)/numpts)
+        CbetaVec = np.arange(0, Cbeta_max, (Cbeta_max)/numpts)
 
-# Plot 1
-plt.plot(yvec1, cSupVec, '-', linewidth=5, color='indigo')
-plt.plot(np.arange(0,1,0.01), np.repeat(cSupHHsqzBound1,100), '-', linewidth=5, color='gray')
-plt.plot(np.arange(0,1,0.01), np.repeat(cSupBB1,100), '-', linewidth=5, color='red')
-# plt.suptitle(r'$b=$'+str(b)+', '+r'$L=$'+str(supRateLo),
-#              fontsize=18, fontweight='bold')
-plt.xlim(0, 1)
-plt.ylim(0, cSupMax)
-ax.set_box_aspect(1)
-plt.xlabel(r'$\alpha$', fontsize=14)
-plt.ylabel(r'$c_S$', fontsize=14, rotation=0, labelpad=14)
-plt.show()
+        eqMats = CthetaCbetaMatsForPlot(numpts, Ctheta_max, Cbeta_max, scDict)
+        # Check for any cells without equilibria
+        Cthdist, Cbedist = (Ctheta_max)/numpts, (Cbeta_max)/numpts
+        for i in range(CthetaVec.shape[0]):
+            for j in range(CbetaVec.shape[0]):
+                if np.nansum(eqMats[:, i, j])==0:  # No equilibria here
+                    storeMat[currbInd, currcSInd] = 1
 
-# Plot 2
-plt.plot(yvec2, cSupVec, '-', linewidth=5, color='indigo')
-plt.plot(np.arange(0,1,0.01), np.repeat(cSupHHsqzBound2,100), '-', linewidth=2, color='gray')
-plt.plot(np.arange(0,1,0.01), np.repeat(cSupBB2,100), '-', linewidth=2, color='red')
-# plt.suptitle(r'$b=$'+str(b)+', '+r'$L=$'+str(supRateLo),
-#              fontsize=18, fontweight='bold')
-plt.xlim(0, 1)
-plt.ylim(0, cSupMax)
-ax.set_box_aspect(1)
-plt.xlabel(r'$\alpha$', fontsize=14)
-plt.ylabel(r'$c_S$', fontsize=14, rotation=0, labelpad=14)
-plt.show()
-
-# Make region plots
-# Ordered as HH, LH (sqz), HH (sqz), NA (cSup too big)
-SPreg_list1 = np.zeros((4, cSupVec.shape[0], alVec.shape[0]))
-SPreg_list1[:] = np.nan
-SPreg_list2 = np.zeros((4, cSupVec.shape[0], alVec.shape[0]))
-SPreg_list2[:] = np.nan
-cSupBB1 = cSupBarBar(scDict1['b'])
-cSupBB2 = cSupBarBar(scDict2['b'])
-for currcSupind, currcSup in enumerate(cSupVec):
-    currdict1, currdict2 = scDict1.copy(), scDict2.copy()
-    currdict1['cSup'] = currcSup
-    currdict2['cSup'] = currcSup
-    cDotDeriv1, cDotDeriv2 = cSupDotDeriv(currdict1), cSupDotDeriv(currdict2)
-    cSupHHsqzBound1, cSupHHsqzBound2 = GetCritcSupHHsqz(currdict1), GetCritcSupHHsqz(currdict2)
-    for curralind, curral in enumerate(alVec):
-        # First dict
-        if currcSup < cSupBB1 and currcSup <= cSupHHsqzBound1:  # LH (sqz) or HH
-            if curral < yvec1[currcSupind]:  # HH
-                SPreg_list1[0, currcSupind, curralind] = 1
-            else:  # LH (sqz)
-                SPreg_list1[1, currcSupind, curralind] = 1
-        elif currcSup < cSupBB1 and currcSup > cSupHHsqzBound1:  # LH (sqz) or HH (sqz)
-            if curral < yvec1[currcSupind]:  # HH (sqz)
-                SPreg_list1[2, currcSupind, curralind] = 1
-            else:  # LH (sqz)
-                SPreg_list1[1, currcSupind, curralind] = 1
-        else:  # NA
-            SPreg_list1[3, currcSupind, curralind] = 1
-        # Second dict
-        if currcSup < cSupBB2 and currcSup <= cSupHHsqzBound2:  # LH (sqz) or HH
-            if curral < yvec2[currcSupind]:  # HH
-                SPreg_list2[0, currcSupind, curralind] = 1
-            else:  # LH (sqz)
-                SPreg_list2[1, currcSupind, curralind] = 1
-        elif currcSup < cSupBB2 and currcSup <= cSupHHsqzBound1:  # LH (sqz) or HH (sqz)
-            if curral < yvec2[currcSupind]:  # HH
-                SPreg_list2[2, currcSupind, curralind] = 1
-            else:  # LH (sqz)
-                SPreg_list2[1, currcSupind, curralind] = 1
-        else:  # NA
-            SPreg_list2[3, currcSupind, curralind] = 1
-
-# Plot 1
+# Plot
+alval = 0.7
 fig = plt.figure()
-fig.suptitle(r'$b=$'+str(b1)+', '+r'$L=$'+str(supRateLo), fontsize=18, fontweight='bold')
+fig.suptitle('Appearance of 1-sup. eq. vs. b and cSup',
+             fontsize=18, fontweight='bold')
 ax = fig.add_subplot(111)
-eqcolors = ['#0b4008', '#82cafc', '#5ca904',  'black']
-labels = ['HH', 'LHsqz', 'HHsqz', 'N']
+
+eqcolors = ['#cf0234', 'deeppink', '#021bf9', '#0d75f8', '#82cafc', '#5ca904', '#0b4008']
+labels = ['LL', 'LLsqz', 'LHexp', 'LHFOC', 'LHsqz', 'HHexp', 'HH']
+
 imlist = []
-for eqind in range(len(labels)):
-    mycmap = matplotlib.colors.ListedColormap(['white', eqcolors[eqind]], name='from_list', N=None)
-    if eqcolors[eqind] == 'black':  # No alpha transparency
-        im = ax.imshow(SPreg_list1[eqind], vmin=0, vmax=1, aspect='auto',
-                            extent=(0, alMax, 0, cSupMax),
-                            origin="lower", cmap=mycmap, alpha=1)
-    else:
-        im = ax.imshow(SPreg_list1[eqind], vmin=0, vmax=1, aspect='auto',
-                            extent=(0, alMax, 0, cSupMax),
+mycmap = matplotlib.colors.ListedColormap(['white', 'black'], name='from_list', N=None)
+im = ax.imshow(storeMat.T, vmin=0, vmax=1, aspect='auto',
+                            extent=(0, np.max(bVec), 0, np.max(cSupVec)),
                             origin="lower", cmap=mycmap, alpha=alval)
-    imlist.append(im)
+imlist.append(im)
 
 legwidth = 20
 wraplabels = ['\n'.join(textwrap.wrap(labels[i], width=legwidth)) for i in range(len(labels))]
-patches = [mpatches.Patch(color=eqcolors[i], edgecolor='black', label=wraplabels[i], alpha=alval) for i in range(len(eqcolors))]
+patches = [mpatches.Patch(color=eqcolors[i], label=wraplabels[i], alpha=alval) for i in range(len(eqcolors))] +\
+          [mpatches.Patch(hatch=r'/////////',fill=False,linewidth=0,snap=False,label='1-sup. eq.')]
+
 # put those patched as legend-handles into the legend
-ax.legend(handles=patches, bbox_to_anchor=(1.3, 1.0), loc='upper right', borderaxespad=0.1, fontsize=8)
-ax.set_xbound(0, alMax)
-ax.set_ybound(0, cSupMax)
-ax.set_box_aspect(1)
-plt.xlabel(r'$\alpha$', fontsize=14)
-plt.ylabel(r'$c_S$', fontsize=14, rotation=0, labelpad=14)
-plt.show()
-
-# Plot 2
-fig = plt.figure()
-fig.suptitle(r'$b=$'+str(b2)+', '+r'$L=$'+str(supRateLo), fontsize=18, fontweight='bold')
-ax = fig.add_subplot(111)
-eqcolors = ['#0b4008', '#82cafc', '#5ca904',  'black']
-labels = ['HH', 'LHsqz', 'HHsqz', 'N']
-imlist = []
-for eqind in range(len(labels)):
-    mycmap = matplotlib.colors.ListedColormap(['white', eqcolors[eqind]], name='from_list', N=None)
-    if eqcolors[eqind] == 'black':  # No alpha transparency
-        im = ax.imshow(SPreg_list2[eqind], vmin=0, vmax=1, aspect='auto',
-                            extent=(0, alMax, 0, cSupMax),
-                            origin="lower", cmap=mycmap, alpha=1)
-    else:
-        im = ax.imshow(SPreg_list2[eqind], vmin=0, vmax=1, aspect='auto',
-                            extent=(0, alMax, 0, cSupMax),
-                            origin="lower", cmap=mycmap, alpha=alval)
-    imlist.append(im)
-
-legwidth = 20
-wraplabels = ['\n'.join(textwrap.wrap(labels[i], width=legwidth)) for i in range(len(labels))]
-patches = [mpatches.Patch(color=eqcolors[i], edgecolor='black', label=wraplabels[i], alpha=alval) for i in range(len(eqcolors))]
-# put those patched as legend-handles into the legend
-ax.legend(handles=patches, bbox_to_anchor=(1.3, 1.0), loc='upper right', borderaxespad=0.1, fontsize=8)
-ax.set_xbound(0, alMax)
-ax.set_ybound(0, cSupMax)
-ax.set_box_aspect(1)
-plt.xlabel(r'$\alpha$', fontsize=14)
-plt.ylabel(r'$c_S$', fontsize=14, rotation=0, labelpad=14)
-plt.show()
-
-
-#############################
-# Plot of various cSup conditions
-#############################
-bVec = np.arange(0.01,0.99,0.01)
-cVec1, cVec2 = cSupBar(bVec), cSupBarBar(bVec)
-cVec3 = np.zeros(bVec.shape[0])
-for i in range(bVec.shape[0]):
-    newdict = scDict1.copy()
-    newdict['b'] = bVec[i]
-    cVec3[i] = GetCritcSupHHsqz(newdict)
-plt.plot(bVec, cVec1, '-', linewidth=5, color='darkgreen')
-plt.plot(bVec, cVec2, '--', linewidth=5, color='firebrick')
-plt.plot(bVec, cVec3, '-.', linewidth=5, color='deepskyblue')
-# plt.suptitle(r'$b=$'+str(b)+', '+r'$L=$'+str(supRateLo),
-#              fontsize=18, fontweight='bold')
-plt.xlim(0, 1)
-plt.ylim(0, 1)
+ax.set_xbound(0, np.max(bVec))
+ax.set_ybound(0, np.max(cSupVec))
 ax.set_box_aspect(1)
 plt.xlabel(r'$b$', fontsize=14)
 plt.ylabel(r'$c_S$', fontsize=14, rotation=0, labelpad=14)
 plt.show()
-
-# Plot WRT different SPfrict values
