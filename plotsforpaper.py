@@ -15,6 +15,13 @@ import matplotlib.pyplot as plt
 np.set_printoptions(precision=3, suppress=True)
 plt.rcParams["font.family"] = "monospace"
 
+def sqroot(val):
+    # Returns square root of val after checking that val is positive; returns NaN otherwise
+    if val<0:
+        retval = np.nan
+    else:
+        retval = np.sqrt(val)
+    return retval
 def SPUtil(q1, q2, lambsup1, lambsup2, alph):
     # Social planner's utility
     return q1*(alph+(lambsup1)-1) + q2*(alph+(lambsup2)-1)
@@ -1212,4 +1219,59 @@ plt.xlabel(r'$b$', fontsize=14)
 plt.ylabel(r'$c_S$', fontsize=14, rotation=0, labelpad=14)
 plt.show()
 
-# Plot WRT different SPfrict values
+#############################
+# Plot of b condition
+#############################
+def bhat(cS):
+    rootval = (8 + 27*(-1 + cS)*cS*(-8 + 5*cS)+3*sqroot(3*((4 - 3*cS)**2)*(-1 + cS)*cS*(-8 + 5*cS)*(1 + 15*cS)))**(1/3)
+    retval = (-10 + 6*cS + 4/rootval + rootval)/(3*(-4 + 3*cS))
+    return retval
+
+def bhatEst(cS):
+    return 0.5 - 0.5*cS
+
+cSVec = np.arange(0.001,0.999,0.001)
+bVec1 = []
+for currcS in cSVec:
+    bVec1.append(bhat(currcS))
+bVec2 = bhatEst(cSVec)
+bVec1 = np.array(bVec1)
+
+plt.plot(cSVec, bVec1, '-', linewidth=5, color='darkgreen')
+plt.plot(cSVec, bVec2, '--', linewidth=5, color='deepskyblue')
+plt.xlim(0, 1)
+plt.ylim(0, 1)
+ax.set_box_aspect(1)
+plt.xlabel(r'$c_S$', fontsize=14)
+plt.ylabel(r'$\hat{b}$', fontsize=14, rotation=0, labelpad=14)
+plt.show()
+
+#############################
+# Plot of cS condition
+#############################
+def cShat(b):
+    rootval = sqroot((36 - 112*b + 132*(b**2) - 64*(b**3) + 21*(b**4) - 64*(b**5) + 90*(b**6) - 48*(b**7) +
+                        9*(b**8))/((-2 + 4*b - 6*(b**2) + 3*(b**3))**2))
+    retval = (2 - 11*(b**2) + 12*(b**3) - 3*(b**4))/(2*(-2 + 4*b - 6*(b**2) + 3*(b**3))) + 0.5*rootval
+    return retval
+
+def cShat2(b):
+    # cS below this cShat2 means that the off-path floor that ensures dual sourcing need never be considered
+    retval = (1 - b)/(1 + b + (b**2) - (b**3))
+    return retval
+
+bVec = np.arange(0.001,0.999,0.001)
+cSVec, cSVec2 = [], []
+for currb in bVec:
+    cSVec.append(cShat(currb))
+    cSVec2.append(cShat2(currb))
+
+plt.plot(bVec, cSVec, '-', linewidth=5, color='darkblue')
+plt.plot(bVec, cSVec2, '-', linewidth=5, color='darkred')
+plt.xlim(0, 1)
+plt.ylim(0, 1)
+ax.set_box_aspect(1)
+plt.xlabel(r'$b$', fontsize=14)
+plt.ylabel(r'$\hat{c}_S$', fontsize=14, rotation=0, labelpad=14)
+plt.show()
+
