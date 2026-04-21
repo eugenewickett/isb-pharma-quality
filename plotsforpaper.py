@@ -873,13 +873,17 @@ def XUBLHsqzAtY0(scDict,step=0.001):
         retval = newUB
     return retval
 
-def YLBLHhld(scDict, X):
+def YLBLHhldLLFOC(scDict, X):
+    # Returns LB of LHhld when comparing on-path equilibrium with LLFOC
     b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
     inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
-    A1 = sqroot((4 * inspSensRet * X * (1 - supRateLo) - 1 / (2 - b) ** 2) / (1 - b ** 2))
-    numerator = ((1 - b ** 2) * A1 * ((1 - b ** 2) * A1 - cS - 2 + 2 / (2 - b))
-            + (1 - b) ** 2 / (2 - b) ** 2)
-    denominator = 2 * (1 - b ** 2) * (1 - supRateLo)
+    diff = supRateHi - supRateLo
+    sqrt_inner = sqroot(
+        (b ** 2 - 1) ** 2 * inspSensSup ** 2 * ((b - 1) ** 2 * b ** 3 - 2 * (b - 2) ** 2 * (b ** 2 + b - 2) * cS +
+        (b - 2) ** 2 * b * cS ** 2) * diff ** 2 / ((b - 2) ** 2 * b * cS ** 2))
+    numerator = cS * ( 2 * (b ** 2 - 1) ** 2 * cS * inspSensSup * diff + b ** 2 * cS * sqrt_inner
+            + (b + 1) * ((b - 2) * b - 4) * (b - 1) ** 2 * inspSensSup * diff)
+    denominator = 8 * (b ** 2 - 2) * (b ** 2 - 1) ** 2 * inspSensSup ** 2 * diff ** 2
     return numerator / denominator
 
 def YLBHHIC(scDict, X):
@@ -965,12 +969,29 @@ def YLBLHhldAtX0(scDict,step=0.001):
         retval = newLB
     return retval
 
+def XLBLHJunc(scDict, step=0.001):
+    # Returns juncture where YLHhldLB hits YLHFOCIRLB
+    currX, found = XLBLHretIR(scDict, 0), False
+    targ = YLBLHhldLLFOC(scDict, 0)
+    while not found:
+        currYLHRetIR = YLBLHIR(scDict, currX)
+        if currYLHRetIR < targ:
+            found = True
+        else:
+            currX = currX + step
+    return currX
 
-
-
-
-
-
+def XLBHHJunc(scDict, step=0.001):
+    # Returns juncture where YHHhldLB hits YHHFOCIRLB
+    currX, found = XLBHHIR(scDict), False
+    targ = YLBHHhld(scDict, 0)
+    while not found:
+        currYHHRetIR = YLBHHIR(scDict, currX)
+        if currYHHRetIR < targ:
+            found = True
+        else:
+            currX = currX + step
+    return currX
 
 
 b, cSup, supRateLo = 0.5, 0.2, 0.8
@@ -1169,64 +1190,96 @@ plt.text(0.039, 0.18, r'Supplier 2', color='black', fontsize=8, fontstyle='itali
 plt.savefig('priceWRTY.png', dpi=300, bbox_inches='tight')
 plt.show()
 
-
-
-
-
-
-
-
-
-
 #####################
 # Equilibrium plots
 #####################
-# Use b=[0.6,0.9]
-b, cSup, supRateLo = 0.6, 0.2, 0.8
-scDict = {'b': b, 'cSup': cSup, 'supRateLo': supRateLo}
+b, cSup, supRateLo, supRateHi, inspSensRet, inspSensSup = 0.8, 0.05, 0.8, 1.0, 1.0, 1.0
+scDict = {'b': b, 'cSup': cSup, 'supRateLo': supRateLo, 'supRateHi': supRateHi,
+          'inspSensRet': inspSensRet, 'inspSensSup': inspSensSup}
+Xmax, Ymax, step = 1.4, 0.08, 0.001
+Xvec = np.arange(0, Xmax, step)
+YvecLL, YvecLHlo, YvecLHhi, YvecHH = [], [], [], []
+# Define breakpoints and Y bounds that are not a function of X
+XLLUB, XLHLBJunc, XLHUB, XHHLBJunc = XUBLL(scDict, 0), XLBLHJunc(scDict), XUBLH(scDict, 0), XLBHHJunc(scDict)
+YLLUB, YLHLB, YLHUB, YHHLB = YUBLL(scDict, 0), YLBLHhldLLFOC(scDict, 0), YUBLH(scDict, 0), YLBHHhld(scDict, 0)
 
-numpts, CthetaMax, cSupMax = 100, 2.0, 0.9
-alval = 0.7
+for Xind in range(Xvec.shape[0]):
+    currX = Xvec[Xind]
+    # LL line
+    if currX <= XLLUB:
+        YvecLL.append(YLLUB)
+    elif currX > XLLUB:
+        YvecLL.append(YUBLLsqz(scDict, currX))
+    # LHlo line
+    if currX < XLHLBJunc:
+        YvecLHlo.append(YLHLB)
+    elif currX >= XLHLBJunc and currX < XLHUB:
+        YvecLHlo.append(YLBLHIR(scDict, currX))
+    else:
+        YvecLHlo.append(-1)
+    # LHhi line
+    if currX < XLHUB:
+        YvecLHhi.append(YLHUB)
+    else:
+        YvecLHhi.append(YUBLHsqz(scDict, currX))
+    # HH line
+    if currX < XHHLBJunc:
+        YvecHH.append(YHHLB)
+    else:
+        YvecHH.append(YLBHHIR(scDict, currX))
 
-eqStrat_matList = LthetaEqMatsForPlot(numpts, CthetaMax, cSupMax, scDict)
-# Fill holes
-for csupind in range(eqStrat_matList.shape[1]):
-    for cthetaind in range(eqStrat_matList.shape[2]):
-        if np.nansum(eqStrat_matList[:,csupind,cthetaind]) == 0:
-            eqStrat_matList[4, csupind, cthetaind] = 1
+alval, lnwd = 0.6, 3
+LLcol, LHcol, HHcol = 'red', 'purple', 'mediumblue'
+
+labels = ['LL', 'LH', 'HH', 'LL'+r'$\cap$'+'LH', 'LH'+r'$\cap$'+'HH']
+plt.rcParams['hatch.linewidth'] = 2.3
 
 fig = plt.figure()
-fig.suptitle(r'$b=$'+str(b)+', '+r'$L=$'+str(supRateLo),
-             fontsize=18, fontweight='bold')
+# fig.suptitle(r'$b=$'+str(b)+', '+r'$L=$'+str(supRateLo),fontsize=18, fontweight='bold')
 ax = fig.add_subplot(111)
-
-eqcolors = ['#cf0234', 'deeppink', '#021bf9', '#0d75f8', '#82cafc', '#5ca904', '#0b4008', 'black']
-labels = ['LL', 'LLsqz', 'LHexp', 'LHFOC', 'LHsqz', 'HHsqz', 'HH', 'N']
-
-imlist = []
-for eqind in range(len(labels)):
-    mycmap = matplotlib.colors.ListedColormap(['white', eqcolors[eqind]], name='from_list', N=None)
-    if eqcolors[eqind] == 'black':  # No alpha transparency
-        im = ax.imshow(eqStrat_matList[eqind], vmin=0, vmax=1, aspect='auto',
-                            extent=(0, CthetaMax, 0, cSupMax),
-                            origin="lower", cmap=mycmap, alpha=1)
-    else:
-        im = ax.imshow(eqStrat_matList[eqind], vmin=0, vmax=1, aspect='auto',
-                            extent=(0, CthetaMax, 0, cSupMax),
-                            origin="lower", cmap=mycmap, alpha=alval)
-    imlist.append(im)
-
+plt.plot(Xvec, YvecLL, linewidth=lnwd, color=LLcol, alpha=alval)
+plt.plot(Xvec, YvecLHlo, linewidth=lnwd, color=LHcol, alpha=alval)
+plt.plot(Xvec, YvecLHhi, linewidth=lnwd, color=LHcol, alpha=alval)
+plt.plot(Xvec, YvecHH, linewidth=lnwd, color=HHcol, alpha=alval)
 legwidth = 20
 wraplabels = ['\n'.join(textwrap.wrap(labels[i], width=legwidth)) for i in range(len(labels))]
 patches = [mpatches.Patch(color=eqcolors[i], edgecolor='black', label=wraplabels[i], alpha=alval) for i in range(len(eqcolors))]
-# put those patched as legend-handles into the legend
-ax.legend(handles=patches, bbox_to_anchor=(1.3, 1.0), loc='upper right', borderaxespad=0.1, fontsize=8)
-ax.set_xbound(0, CthetaMax)
-ax.set_ybound(0, cSupMax)
-ax.set_box_aspect(1)
-plt.xlabel(r'$C_{\theta}$', fontsize=14)
-plt.ylabel(r'$c_S$', fontsize=14, rotation=0, labelpad=14)
+# # put those patched as legend-handles into the legend
+# ax.legend(handles=patches, bbox_to_anchor=(1.3, 1.0), loc='upper right', borderaxespad=0.1, fontsize=8)
+# ax.set_box_aspect(1)
+plt.fill_between(Xvec, YvecLHlo, YvecLL, hatch='////', facecolor=LLcol, edgecolor=LHcol, alpha=alval*0.2)
+plt.fill_between(Xvec, YvecLL, np.repeat(-1, len(YvecLL)), facecolor=LLcol, alpha=alval*0.3)
+plt.fill_between(Xvec, YvecLL, YvecLHhi, facecolor=LHcol, alpha=alval*0.3)
+plt.fill_between(Xvec, YvecLHhi, np.repeat(1, len(YvecLHhi)), facecolor=HHcol, alpha=alval*0.3)
+plt.fill_between(Xvec, YvecLHhi, YvecHH, hatch='////', facecolor=HHcol, edgecolor=LHcol, alpha=alval*0.2)
+plt.xlabel(r'$X$', fontsize=11)
+plt.ylabel(r'$Y$', fontsize=11, rotation=0, labelpad=14)
+plt.text(0.2, 0.02, 'LL', color=LLcol, fontsize=15, fontweight='bold')
+plt.text(0.4, 0.07, 'HH', color=HHcol, fontsize=15, fontweight='bold')
+plt.text(0.73, 0.04, 'LH', color=LHcol, fontsize=15, fontweight='bold')
+plt.text(0.64, 0.006, 'LL\n'+r'$\cap$'+'\nLH', color='black', fontsize=15, fontweight='bold',
+         horizontalalignment='center', alpha=0.7)
+plt.text(1.075, 0.006, 'LH\n'+r'$\cap$'+'\nHH', color='black', fontsize=15, fontweight='bold',
+         horizontalalignment='center', alpha=0.7)
+ax.set_xbound(0, Xmax)
+ax.set_ybound(0, Ymax)
 plt.show()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #####################
 # Equilibrium plots: ONLY LL/LH/HH
@@ -1431,226 +1484,6 @@ plt.xlim(0, CthetaMax)
 plt.xlabel(r'$C_{\theta}$', fontsize=14)
 plt.ylabel(r'$U^R$', fontsize=14, rotation=0, labelpad=14)
 plt.show()
-
-
-
-#############################
-# Social welfare plot
-#############################
-b, cSup, supRateLo = 0.95, 0.2, 0.8
-scDict = {'b': b, 'cSup': cSup, 'supRateLo': supRateLo}
-uL_min, uL_max = -1.5, 0.75
-cSup_max = 0.5
-numpts, alval = 6, 0.9
-
-eqMat, CthMat, SWMat = SocWelEqMatsForPlot(numpts, uL_min, uL_max, cSup_max, scDict, printUpdate=True)
-
-fig = plt.figure()
-fig.suptitle(r'$b=$'+str(b)+', '+r'$L=$'+str(supRateLo),
-             fontsize=18, fontweight='bold')
-ax1 = fig.add_subplot(221)
-
-eqcolors = ['#cf0234', 'deeppink', '#021bf9', '#0d75f8', '#82cafc', '#5ca904', '#0b4008', 'black']
-labels = ['LL', 'LLsqz', 'LHexp', 'LHFOC', 'LHsqz', 'HHsqz', 'HH', 'N']
-
-imlist = []
-for eqind in range(len(labels)):
-    mycmap = matplotlib.colors.ListedColormap(['white', eqcolors[eqind]], name='from_list', N=None)
-    if eqcolors[eqind] == 'black':  # No alpha transparency
-        im = ax1.imshow(eqMat[eqind].T, vmin=0, vmax=1, aspect='auto',
-                            extent=(uL_min, uL_max, 0, cSup_max),
-                            origin="lower", cmap=mycmap, alpha=1)
-    else:
-        im = ax1.imshow(eqMat[eqind].T, vmin=0, vmax=1, aspect='auto',
-                            extent=(uL_min, uL_max, 0, cSup_max),
-                            origin="lower", cmap=mycmap, alpha=alval)
-    imlist.append(im)
-
-legwidth = 20
-wraplabels = ['\n'.join(textwrap.wrap(labels[i], width=legwidth)) for i in range(len(labels))]
-patches = [mpatches.Patch(color=eqcolors[i], edgecolor='black', label=wraplabels[i], alpha=alval) for i in range(len(eqcolors))]
-# put those patched as legend-handles into the legend
-ax1.legend(handles=patches, bbox_to_anchor=(1.3, 1.0), loc='upper right', borderaxespad=0.1, fontsize=8)
-ax1.set_xbound(uL_min, uL_max)
-ax1.set_ybound(0, cSup_max)
-ax1.set_box_aspect(1)
-plt.xlabel(r'$u_{L}$', fontsize=14)
-plt.ylabel(r'$c_S$', fontsize=14, rotation=0, labelpad=14)
-ax2 = fig.add_subplot(222)
-im = ax2.imshow(CthMat.T, vmin=np.min(CthMat), vmax=np.max(CthMat), aspect='auto', extent=(uL_min, uL_max, 0, cSup_max),
-                            origin="lower", cmap='Reds', alpha=1)
-ax3 = fig.add_subplot(223)
-im = ax3.imshow(SWMat.T, vmin=np.min(SWMat), vmax=np.max(SWMat), aspect='auto', extent=(uL_min, uL_max, 0, cSup_max),
-                            origin="lower", cmap='Blues', alpha=1)
-
-plt.show()
-
-
-#############################
-# SP friction threshold plot
-#############################
-# for b=[0.5,0.8]
-b, cSup, supRateLo = 0.5, 0.2, 0.9
-b1, b2 = 0.5, 0.8
-cSupMax, alMax = 0.55, 1.0
-scDict1 = {'b': b1, 'cSup': cSup, 'supRateLo': supRateLo}
-scDict2 = {'b': b2, 'cSup': cSup, 'supRateLo': supRateLo}
-cSupVec = np.arange(0.001, cSupMax, 0.005)
-alVec = np.arange(0.001, alMax, 0.005)
-yvec1, yvec2 = [], []
-
-cSupBB1 = cSupBarBar(scDict1['b'])
-cSupBB2 = cSupBarBar(scDict2['b'])
-
-for currcSup in cSupVec:
-    currdict1, currdict2 = scDict1.copy(), scDict2.copy()
-    currdict1['cSup'] = currcSup
-    currdict2['cSup'] = currcSup
-    cSupHHsqzBound1 = GetCritcSupHHsqz(currdict1)
-    cSupHHsqzBound2 = GetCritcSupHHsqz(currdict2)
-    if currcSup > cSupHHsqzBound1 and currcSup < cSupBB1:
-        yvec1.append(SPfrictThreshHHsqz(currdict1))
-    elif currcSup < cSupBB1:
-        yvec1.append(SPfrictThresh(currdict1))
-    else:
-        yvec1.append(np.nan)
-    if currcSup > cSupHHsqzBound2 and currcSup < cSupBB2:
-        yvec2.append(SPfrictThreshHHsqz(currdict2))
-    elif currcSup < cSupBB2:
-        yvec2.append(SPfrictThresh(currdict2))
-    else:
-        yvec2.append(np.nan)
-
-# Plot 1
-plt.plot(yvec1, cSupVec, '-', linewidth=5, color='indigo')
-plt.plot(np.arange(0,1,0.01), np.repeat(cSupHHsqzBound1,100), '-', linewidth=5, color='gray')
-plt.plot(np.arange(0,1,0.01), np.repeat(cSupBB1,100), '-', linewidth=5, color='red')
-# plt.suptitle(r'$b=$'+str(b)+', '+r'$L=$'+str(supRateLo),
-#              fontsize=18, fontweight='bold')
-plt.xlim(0, 1)
-plt.ylim(0, cSupMax)
-ax.set_box_aspect(1)
-plt.xlabel(r'$\alpha$', fontsize=14)
-plt.ylabel(r'$c_S$', fontsize=14, rotation=0, labelpad=14)
-plt.show()
-
-# Plot 2
-plt.plot(yvec2, cSupVec, '-', linewidth=5, color='indigo')
-plt.plot(np.arange(0,1,0.01), np.repeat(cSupHHsqzBound2,100), '-', linewidth=2, color='gray')
-plt.plot(np.arange(0,1,0.01), np.repeat(cSupBB2,100), '-', linewidth=2, color='red')
-# plt.suptitle(r'$b=$'+str(b)+', '+r'$L=$'+str(supRateLo),
-#              fontsize=18, fontweight='bold')
-plt.xlim(0, 1)
-plt.ylim(0, cSupMax)
-ax.set_box_aspect(1)
-plt.xlabel(r'$\alpha$', fontsize=14)
-plt.ylabel(r'$c_S$', fontsize=14, rotation=0, labelpad=14)
-plt.show()
-
-# Make region plots
-# Ordered as HH, LH (sqz), HH (sqz), NA (cSup too big)
-SPreg_list1 = np.zeros((4, cSupVec.shape[0], alVec.shape[0]))
-SPreg_list1[:] = np.nan
-SPreg_list2 = np.zeros((4, cSupVec.shape[0], alVec.shape[0]))
-SPreg_list2[:] = np.nan
-cSupBB1 = cSupBarBar(scDict1['b'])
-cSupBB2 = cSupBarBar(scDict2['b'])
-for currcSupind, currcSup in enumerate(cSupVec):
-    currdict1, currdict2 = scDict1.copy(), scDict2.copy()
-    currdict1['cSup'] = currcSup
-    currdict2['cSup'] = currcSup
-    cDotDeriv1, cDotDeriv2 = cSupDotDeriv(currdict1), cSupDotDeriv(currdict2)
-    cSupHHsqzBound1, cSupHHsqzBound2 = GetCritcSupHHsqz(currdict1), GetCritcSupHHsqz(currdict2)
-    for curralind, curral in enumerate(alVec):
-        # First dict
-        if currcSup < cSupBB1 and currcSup <= cSupHHsqzBound1:  # LH (sqz) or HH
-            if curral < yvec1[currcSupind]:  # HH
-                SPreg_list1[0, currcSupind, curralind] = 1
-            else:  # LH (sqz)
-                SPreg_list1[1, currcSupind, curralind] = 1
-        elif currcSup < cSupBB1 and currcSup > cSupHHsqzBound1:  # LH (sqz) or HH (sqz)
-            if curral < yvec1[currcSupind]:  # HH (sqz)
-                SPreg_list1[2, currcSupind, curralind] = 1
-            else:  # LH (sqz)
-                SPreg_list1[1, currcSupind, curralind] = 1
-        else:  # NA
-            SPreg_list1[3, currcSupind, curralind] = 1
-        # Second dict
-        if currcSup < cSupBB2 and currcSup <= cSupHHsqzBound2:  # LH (sqz) or HH
-            if curral < yvec2[currcSupind]:  # HH
-                SPreg_list2[0, currcSupind, curralind] = 1
-            else:  # LH (sqz)
-                SPreg_list2[1, currcSupind, curralind] = 1
-        elif currcSup < cSupBB2 and currcSup <= cSupHHsqzBound1:  # LH (sqz) or HH (sqz)
-            if curral < yvec2[currcSupind]:  # HH
-                SPreg_list2[2, currcSupind, curralind] = 1
-            else:  # LH (sqz)
-                SPreg_list2[1, currcSupind, curralind] = 1
-        else:  # NA
-            SPreg_list2[3, currcSupind, curralind] = 1
-
-# Plot 1
-fig = plt.figure()
-fig.suptitle(r'$b=$'+str(b1)+', '+r'$L=$'+str(supRateLo), fontsize=18, fontweight='bold')
-ax = fig.add_subplot(111)
-eqcolors = ['#0b4008', '#82cafc', '#5ca904',  'black']
-labels = ['HH', 'LHsqz', 'HHsqz', 'N']
-imlist = []
-for eqind in range(len(labels)):
-    mycmap = matplotlib.colors.ListedColormap(['white', eqcolors[eqind]], name='from_list', N=None)
-    if eqcolors[eqind] == 'black':  # No alpha transparency
-        im = ax.imshow(SPreg_list1[eqind], vmin=0, vmax=1, aspect='auto',
-                            extent=(0, alMax, 0, cSupMax),
-                            origin="lower", cmap=mycmap, alpha=1)
-    else:
-        im = ax.imshow(SPreg_list1[eqind], vmin=0, vmax=1, aspect='auto',
-                            extent=(0, alMax, 0, cSupMax),
-                            origin="lower", cmap=mycmap, alpha=alval)
-    imlist.append(im)
-
-legwidth = 20
-wraplabels = ['\n'.join(textwrap.wrap(labels[i], width=legwidth)) for i in range(len(labels))]
-patches = [mpatches.Patch(color=eqcolors[i], edgecolor='black', label=wraplabels[i], alpha=alval) for i in range(len(eqcolors))]
-# put those patched as legend-handles into the legend
-ax.legend(handles=patches, bbox_to_anchor=(1.3, 1.0), loc='upper right', borderaxespad=0.1, fontsize=8)
-ax.set_xbound(0, alMax)
-ax.set_ybound(0, cSupMax)
-ax.set_box_aspect(1)
-plt.xlabel(r'$\alpha$', fontsize=14)
-plt.ylabel(r'$c_S$', fontsize=14, rotation=0, labelpad=14)
-plt.show()
-
-# Plot 2
-fig = plt.figure()
-fig.suptitle(r'$b=$'+str(b2)+', '+r'$L=$'+str(supRateLo), fontsize=18, fontweight='bold')
-ax = fig.add_subplot(111)
-eqcolors = ['#0b4008', '#82cafc', '#5ca904',  'black']
-labels = ['HH', 'LHsqz', 'HHsqz', 'N']
-imlist = []
-for eqind in range(len(labels)):
-    mycmap = matplotlib.colors.ListedColormap(['white', eqcolors[eqind]], name='from_list', N=None)
-    if eqcolors[eqind] == 'black':  # No alpha transparency
-        im = ax.imshow(SPreg_list2[eqind], vmin=0, vmax=1, aspect='auto',
-                            extent=(0, alMax, 0, cSupMax),
-                            origin="lower", cmap=mycmap, alpha=1)
-    else:
-        im = ax.imshow(SPreg_list2[eqind], vmin=0, vmax=1, aspect='auto',
-                            extent=(0, alMax, 0, cSupMax),
-                            origin="lower", cmap=mycmap, alpha=alval)
-    imlist.append(im)
-
-legwidth = 20
-wraplabels = ['\n'.join(textwrap.wrap(labels[i], width=legwidth)) for i in range(len(labels))]
-patches = [mpatches.Patch(color=eqcolors[i], edgecolor='black', label=wraplabels[i], alpha=alval) for i in range(len(eqcolors))]
-# put those patched as legend-handles into the legend
-ax.legend(handles=patches, bbox_to_anchor=(1.3, 1.0), loc='upper right', borderaxespad=0.1, fontsize=8)
-ax.set_xbound(0, alMax)
-ax.set_ybound(0, cSupMax)
-ax.set_box_aspect(1)
-plt.xlabel(r'$\alpha$', fontsize=14)
-plt.ylabel(r'$c_S$', fontsize=14, rotation=0, labelpad=14)
-plt.show()
-
 
 #############################
 # Plot of various cSup conditions
