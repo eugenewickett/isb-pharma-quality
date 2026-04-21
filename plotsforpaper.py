@@ -1,6 +1,4 @@
 # Plot generation for "Strategic Role of Inspections in Pharmaceutical Supply Chains"
-# These functions use the simpler version of the model
-#   - perfect diagnostic, H=1, no retailer quality choice, retailer sources from both suppliers or neither
 # 25-NOV-25
 
 import numpy as np
@@ -13,7 +11,7 @@ from matplotlib.widgets import RadioButtons
 import matplotlib.pyplot as plt
 
 np.set_printoptions(precision=3, suppress=True)
-plt.rcParams["font.family"] = "monospace"
+plt.rcParams["font.family"] = "serif"
 
 def sqroot(val):
     # Returns square root of val after checking that val is positive; returns NaN otherwise
@@ -26,9 +24,9 @@ def SPUtil(q1, q2, lambsup1, lambsup2, alph):
     # Social planner's utility
     return q1*(alph+(lambsup1)-1) + q2*(alph+(lambsup2)-1)
 
-def SupUtil(q, w, cSup):
+def SupUtil(q, w, cSup, lambsup, Y):
     # Returns supplier utility
-    return q*(w-cSup)
+    return q*(w-cSup) - (1-lambsup)*Y
 
 def quantOpt(w, wOpp, b):
     # Returns optimal order quantities under dual sourcing
@@ -653,75 +651,532 @@ def SocWelEqMatsForPlot(numpts, uL_min, uL_max, cSup_max, scDict, Cthstep = 1/10
 
     return eq_matList, Cth_matList, SW_matList
 
+##################
+# 4/15 NEW PRICING/BOUND FUNCTIONS
+##################
+def PriceLL(scDict, X, Y):
+    # Returns on-path LL prices
+    w = max((1 - scDict['b']) / (2 - scDict['b']), 0)
+    return w, w
+
+def PriceLLsqz(scDict, X, Y):
+    # Returns on-path LLsqz prices
+    b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
+    inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
+    w = max(1 - sqroot(2 * (1 + scDict['b']) * X * inspSensRet * (1 - scDict['supRateLo'] ** 2)), 0)
+    return w, w
+
+def PriceLH(scDict, X, Y):
+    # Returns on-path LH-FOC prices
+    b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
+    inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
+    w1 = max((2 - b - (b ** 2) + b * cS) / (4 - b ** 2), 0)
+    w2 = max((2 - b - (b ** 2) + 2 * cS) / (4 - b ** 2), 0)
+    return w1, w2
+
+def PriceLHsqz(scDict, X, Y):
+    # Returns on-path LHsqz prices; accounts for w2<cS
+    b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
+    inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
+    # radterm = sqroot((4 * (4 - 3 * (b ** 2)) * (1 - supRateLo) * inspSensRet * X + cS * (2 - cS) - 1) / (1 - (b ** 2)))
+    w1 = (b - b*cSup + (b**2)*(3-2*np.sqrt((1+(-2+cSup)*cSup -\
+            4*(-4 + 3*b**2)*X*(-1+supRateLo)) / (-1 + b**2)))+2*(-2 + sqroot((1 + (-2 + cSup)* cSup -\
+            4*(-4+3*(b**2))*X*(-1 +supRateLo)) / (-1 + b**2)))) / (-4 + 3*(b**2))
+    w2 = max(0.5 * (1 + cSup + b * (-1 + w1)), 0)
+    if w2 < cS:  # Need adjusted w1
+        # radterm2 = sqroot((((1 - cS) ** 2) + 4 * inspSensRet * X * (supRateHi * supRateLo - 1)) / (b ** 2 - 1))
+        w1 = 1 + b*(-1 + cSup + b*sqroot((1 + (-2 + cSup)*cSup +4*X*(-1+supRateLo))/(-1 + (b**2)))) -\
+         np.sqrt((1 + (-2+cSup)*cSup + 4*X*(-1 + supRateLo))/(-1 + (b**2)))
+        w2 = cS
+    return w1, w2
+
+def PriceLHhld(scDict, X, Y):
+    # Returns on-path LH-hld prices; accounts for w2<cS
+    b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
+    inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
+    w1 = (cS * (2*b+cS -2) - 8*(b**2 -1)*inspSensSup*Y*(supRateHi-supRateLo))/(2*b*cS)
+    #w2 = max(0.5 * (1 + cSup + b * (-1 + w1)), 0)
+    w2 = (3*cS/4) - (1/cS)*(2 * (b**2 -1) * inspSensSup*Y*(supRateHi-supRateLo))
+    if w2 < cS:  # Need adjusted w1
+        radterm2 = sqroot(2*(b**2)*(1-(b**2)*(1-supRateLo)*inspSensSup*Y))
+        w1 = (2*radterm2 - b*(1-b))/(b**2)
+        w2 = cS
+    return w1, w2
+
+def PriceHH(scDict, X, Y):
+    # Returns on-path HH-FOC prices
+    b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
+    inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
+    w = max((1 - b + cS) / (2 - b), 0)
+    return w, w
+
+def PriceHHhld(scDict, X, Y):
+    # Returns on-path HH-hld prices
+    b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
+    inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
+    radterm = sqroot((1-b)*(2*(1+b)*((2-b)**2)*Y*inspSensSup*(1-supRateLo) - (b-1)*(cS**2) +(b-2)*cS))
+    w = ((b**2) +2*(radterm+1+cS) -b*(3+2*cS)) / ((2-b)**2)
+    if w < cS:  # Need adjusted w1
+        w = -0.01
+    return w, w
+
+def XUBLL(scDict, Y):
+    # Returns LL-FOC UB in X
+    b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
+    inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
+    retval = 1/(2*inspSensRet*((2 -b)**2)*(1 + b)*(1 - (supRateLo**2)))
+    return retval
+
+def YUBLL(scDict, X):
+    # Returns LL-FOC UB in X
+    b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
+    inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
+    retval = (cS*(b*(cS-4)- 2*cS+4)) / (8*(2-b)*(1-(b**2))*inspSensSup* (supRateHi-supRateLo))
+    return retval
+
+def XUBLLsqz(scDict, Y):
+    # Returns LL-sqz UB in X for Y=0
+    b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
+    inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
+    numerator = (4 * (b + 1) * sqroot((b - 1) * cS * (supRateLo ** 2 - 1) ** 2 * inspSensRet ** 2 * (b + cS -
+            2) * (b * cS + b - 2) ** 2 / (b + 1) ** 2) - (supRateLo ** 2 - 1) * inspSensRet * ((b * (b + 4) -
+            4) * cS ** 2 + 2 * (3 * b - 2) * (b - 2) * cS + (b - 2) ** 2))
+    denominator = 2 * (b - 2) ** 4 * (b + 1) * (supRateLo ** 2 - 1) ** 2 * inspSensRet ** 2
+    return numerator / denominator
+
+def YUBLLsqz(scDict, X):
+    # Returns LL-sqz UB in Y
+    b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
+    inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
+    inner = -(b + 1) * (supRateLo ** 2 - 1) * inspSensRet * X
+    sqrt_inner = sqroot(inner)
+    numerator = (2 * sqroot(2) * b * cS * sqrt_inner - 2 * (b + 1) * (b - 2) ** 2 * (supRateLo ** 2 - 1) * inspSensRet * X
+            + 2 * np.sqrt(2) * b * sqrt_inner - 4 * np.sqrt(2) * sqrt_inner + (cS - 1) ** 2)
+    denominator = 8 * (b ** 2 - 1) * inspSensSup * (supRateHi - supRateLo)
+    return numerator / denominator
+
+def XUBLH(scDict, Y):
+    # Returns LH-FOC UB in X
+    b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
+    inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
+    numer = (8 - 2 * b ** 3 * (1 - cS) - 3 * b ** 2 * (2 - cS * (2 - cS)) - 4 * cS * (2 - cS))
+    denom = 4 * (4 - b ** 2) ** 2 * (1 - b ** 2) * (1 - supRateLo) * inspSensRet
+    return numer / denom
+
+def YUBLH(scDict, X):
+    # Returns LH-FOC UB in Y
+    b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
+    inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
+    numer = cS * (b * (b + 4) * cS - 4 * b * (b + 1) - 4 * cS + 8)
+    denom = 8 * (b ** 4 - 5 * b ** 2 + 4) * inspSensSup * (supRateHi - supRateLo)
+    return numer / denom
+
+def XLBLHretIR(scDict, Y):
+    # Returns LH-FOC LB in X where the Y-IR LB needs to be used for X larger than this X LB
+    b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
+    inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
+    numer = (b * (b * (4 - 3 * b ** 2) * cS ** 2 + 4 * (b - 1) * (b + 2) ** 2 * cS - 8 * b * (b + 3)) + 32)
+    denom = 16 * (b ** 2 - 4) ** 2 * (b ** 2 - 1) * (supRateLo ** 2 - 1) * inspSensRet
+    return numer / denom
+
+def YLBLHIC(scDict, X):
+    # Returns LH-FOC LB in Y where the Y-IC LB is used; for X smaller than XLBLHretIR
+    b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
+    inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
+    numer = cS * (b * (b * (3 * cS - 4) - 4) - 4 * cS + 8)
+    denom = 8 * (b ** 4 - 5 * b ** 2 + 4) * inspSensSup * (supRateHi - supRateLo)
+    return numer / denom
+
+def YLBLHIR(scDict, X):
+    # Returns LH-FOC LB in Y where the Y-IR LB is used; for X larger than XLBLHretIR
+    b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
+    inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
+    A3 = sqroot((4 * (b ** 2 - 4) ** 2 * (supRateLo ** 2 - 1) * inspSensRet * X + (b * (cS - 1) - 2) ** 2) / ((b ** 2 - 4) ** 2 * (b ** 2 - 1)))
+    numer = ((b ** 2 - 1) * A3 * ((b ** 2 - 1) * A3 + b ** 2 * cS / (4 - b ** 2) + 2 / (b - 2) + 2)
+            + (b ** 2 * (-cS) + b ** 2 + b + 2 * cS - 2) ** 2 / (b ** 2 - 4) ** 2)
+    denom = 2 * (b ** 2 - 1) * inspSensSup * (supRateHi - supRateLo)
+    return numer / denom
+
+def XLBLHAtY0(scDict,step=0.001):
+    # Returns LH-FOC LB in X at Y=0
+    b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
+    inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
+    start = XUBLH(scDict, 0)
+    # Check if start is even valid at 0
+    if YLBLHIR(scDict, start) > 0:
+        retval = start
+    else:
+        stop = False
+        newLB = start - step
+        while not stop:
+            if YLBLHIR(scDict, newLB) > 0:
+                stop = True
+            else:
+                newLB = newLB - step
+        retval = newLB
+    return retval
+
+def XUBLHsqzAtCost(scDict, Y):
+    # X UB on standard LHsqz prices; LHsqzAtCost needs to be used above this UB
+    b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
+    inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
+    numerator = (1 - cS) ** 2
+    denominator = 4 * b ** 2 * inspSensRet * (1 - supRateHi * supRateLo)
+    return numerator / denominator
+
+def YUBLHsqz(scDict, X):
+    # Returns LH-FOC LB in Y where the Y-IR LB is used; for X larger than XLBLHretIR
+    b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
+    inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
+    A1 = sqroot((b**2 - 1) * (cS - 1)**2 - 4 * (3 * b**4 - 7 * b**2 + 4) * inspSensRet * X * (supRateHi * supRateLo - 1))
+    numerator = ( (b - 1) * b * (cS - 1) * (  (b * (b * ((b - 5) * b - 4) + 16) + 16) * cS
+            - b ** 2 * (b * (b + 7) + 8) ) + b ** 4 * ( (b ** 2 - 1) * (cS - 1) ** 2
+                    - 4 * (3 * b ** 4 - 7 * b ** 2 + 4) * inspSensRet * X * (supRateHi * supRateLo - 1) )
+            + 2 * ((b - 4) * b * (b + 1) + 4) * b ** 2 * cS * A1
+            - 2 * (b - 2) * (b - 1) * (b + 2) ** 3 * A1 + 32 * (3 * b ** 6 - 13 * b ** 4 + 18 * b ** 2 - 8) * inspSensRet * X * (supRateHi * supRateLo - 1) )
+    denominator = 8 * (4 - 3 * b ** 2) ** 2 * (b ** 2 - 1) * inspSensSup * (supRateHi - supRateLo)
+
+    return numerator / denominator
+
+def YUBLHsqzAtCost(scDict, X):
+    b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
+    inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
+    A2 = sqroot(((cS - 1)**2 + 4 * inspSensRet * X * (supRateHi * supRateLo - 1)) / (b**2 - 1))
+    numerator = ( 4 * b ** 2 * (cS - 1) * A2  + b * (cS * (4 * A2 + 5 * cS - 10) + 16 * inspSensRet * X * (supRateHi * supRateLo - 1) + 5)
+            + 4 * A2  + 3 * (cS - 2) * cS  + 16 * inspSensRet * X * (supRateHi * supRateLo - 1)  + 3)
+    denominator = 8 * (b + 1) * inspSensSup * (supRateHi - supRateLo)
+    return numerator / denominator
+
+def XUBLHsqzAtY0(scDict,step=0.001):
+    # Returns LH-sqz LB in X at Y=0
+    b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
+    inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
+    XUBAtCost = XUBLHsqzAtCost(scDict, 0)
+    # Check if Y UB is non-negative at this XUBAtCost
+    if YUBLHsqz(scDict, XUBAtCost) < 0:
+        stop = False
+        newUB = XUBAtCost - step
+        while not stop:
+            if YUBLHsqz(scDict, newUB) > 0:
+                stop = True
+            else:
+                newUB = newUB - step
+        retval = newUB
+    else:
+        stop = False
+        newUB = XUBAtCost + step
+        while not stop:
+            if YUBLHsqzAtCost(scDict, newUB) < 0:
+                stop = True
+            else:
+                newUB = newUB + step
+        retval = newUB
+    return retval
+
+def YLBLHhld(scDict, X):
+    b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
+    inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
+    A1 = sqroot((4 * inspSensRet * X * (1 - supRateLo) - 1 / (2 - b) ** 2) / (1 - b ** 2))
+    numerator = ((1 - b ** 2) * A1 * ((1 - b ** 2) * A1 - cS - 2 + 2 / (2 - b))
+            + (1 - b) ** 2 / (2 - b) ** 2)
+    denominator = 2 * (1 - b ** 2) * (1 - supRateLo)
+    return numerator / denominator
+
+def YLBHHIC(scDict, X):
+    # Returns Y LB for HH when retailer IR is not considered
+    b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
+    inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
+    numerator = cS * (4 - 2 * cS - b * (4 - 3 * cS))
+    denominator = 8 * (2 - b) * (1 - b ** 2) * (1 - supRateLo) * inspSensSup
+    return numerator / denominator
+
+def YLBHHhld(scDict, X):
+    # Returns Y LB for HH when retailer IR is not considered
+    b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
+    inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
+    numer = cS* (b*(cS-1)-cS+2)
+    denom = 2*((b-2)**2)*(b+1) *(supRateHi-supRateLo) *inspSensSup
+    return numer / denom
+
+def XLBHHIR(scDict):
+    # Returns X juncture for HH when retailer IR must be considered
+    b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
+    inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
+    numerator = (b ** 2 * cS * (4 - 3 * cS) + 4 * b * (cS - 2) + 4 * (cS - 2) * cS + 8)
+    denominator = 16 * (b - 2) ** 2 * (b ** 2 - 1) * inspSensRet * (supRateHi * supRateLo - 1)
+    return numerator / denominator
+
+def YLBHHIR(scDict, X):
+    # Returns Y LB for HH when retailer IR is considered
+    b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
+    inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
+    cS_bar = 1 - cS
+    A1 = sqroot( (4 * (2 - b) ** 2 * X * inspSensRet * (1 - supRateHi * supRateLo) + (2 - cS) * cS - 1)
+        / ((2 - b) ** 2 * (1 - b ** 2)))
+    numerator = ( b ** 2 * (12 * X * inspSensRet * (1 - supRateHi * supRateLo) - (4 - cS) * A1)
+            + 2 * b * cS_bar * (cS_bar - A1) + 4 * (A1 - 4 * X * inspSensRet * (1 - supRateHi * supRateLo))
+            + b ** 3 * ((2 - cS) * A1 - 4 * X * inspSensRet * (1 - supRateHi * supRateLo)))
+    denominator = 2 * (2 - b) ** 2 * (1 + b) * (supRateHi - supRateLo) * inspSensSup
+    return numerator / denominator
+
+def XLBHHAtY0(scDict,step=0.001):
+    # Returns HH-FOC LB in X at Y=0
+    b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
+    inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
+    start = XUBLH(scDict, 0)
+    # Increase until YLBHHIR falls below 0
+    if YLBHHIR(scDict, start) < 0:
+        retval = start
+    else:
+        stop = False
+        newLB = start + step
+        while not stop:
+            if YLBHHIR(scDict, newLB) < 0:
+                stop = True
+            else:
+                newLB = newLB + step
+        retval = newLB
+    return retval
+
+def YLBLHhldAtX0(scDict,step=0.001):
+    # Returns LH-hld LB in Y at X=0
+    b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
+    inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
+    start = YUBLL(scDict, 0)
+    # Decrease until better off-path utility for Supplier 1
+    w1LL, w2LL = PriceLL(scDict, 0, 0)
+    currw1, currw2 = PriceLHhld(scDict, 0, start)
+    currUtil1 = SupUtil(quantOpt(currw1, currw2, b), currw1, 0, supRateLo, Y)
+    LLUtil = SupUtil(quantOpt(w1LL, w2LL, b), w1LL, 0, supRateLo, Y)
+    if LLUtil > currUtil1:
+        retval = start
+    else:
+        stop = False
+        newLB = start - step
+        currw1, currw2 = PriceLHhld(scDict, 0, newLB)
+        currUtil1 = SupUtil(quantOpt(currw1, currw2, b), currw1, 0, supRateLo, Y)
+        while not stop:
+            if LLUtil > currUtil1:
+                stop = True
+            else:
+                newLB = newLB - step
+                currw1, currw2 = PriceLHhld(scDict, 0, newLB)
+                currUtil1 = SupUtil(quantOpt(currw1, currw2, b), currw1, 0, supRateLo, Y)
+        retval = newLB
+    return retval
+
+
+
+
+
+
+
+
+
 b, cSup, supRateLo = 0.5, 0.2, 0.8
 scDict = {'b': b, 'cSup': cSup, 'supRateLo': supRateLo}
 
-#######################
-# WHOLESALE PRICE PLOTS
-#######################
-# for b=[0.6, 0.9]
-b, cSup, supRateLo = 0.5, 0.2, 0.8
-scDict = {'b': b, 'cSup': cSup, 'supRateLo': supRateLo}
+#####################
+# Retailer dual-sourcing validity
+#####################
+b, cSup, supRateLo, supRateHi, inspSensRet = 0.7, 0.2, 0.8, 0.95, 0.95
+X = 0.35
+scDict = {'b': b, 'cSup': cSup, 'supRateLo': supRateLo, 'supRateHi': supRateLo, 'inspSensRet': inspSensRet}
+# This plot shows valid quality decisions that keep the retailer on the market for different wholesale prices
+numpts = 2000 # Resolution of wholesale prices
+def RetThreshBin(w1, w2, rateSup1, rateSup2, X, scDict):  # Indicates if retailer will stay on the market
+    b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
+    inspSensRet = scDict['inspSensRet']
+    threshold = (2-2*b*(1-w1)*(1-w2) - w1*(2-w1) - w2*(2-w2))/(4*inspSensRet*(1-(b**2))*(1-rateSup1*rateSup2))
+    if X > threshold:
+        retval = 0
+    else:
+        retval = 1
+    return retval
 
-CthLLUB, CthHHLB, CthHHsqzLB = CthetaLLUB(scDict), CthetaHHLB(scDict), CthetaHHsqzLB(scDict)
-CthLHFOCLB, CthLHexpLB, CthLHFOCUB = CthetaLHFOCLB(scDict), CthetaLHexpIRLB(scDict), CthetaLHFOCUB(scDict)
-(CthLHsqzUB, _), CthLHsqztwoUB, CthLLsqzUB = CthetaLHsqzUB(scDict), CthetaLHsqztwoUB(scDict), CthetaLLsqzUB(scDict)
-CthetaMax = 1.2*CthHHLB
-CthetaVec = np.arange(0, CthetaMax, 0.001)
-LLprices = np.empty((CthetaVec.shape[0], 2))
+plotMat = np.empty((numpts, numpts, 4))  # LL, LH, HH, N
+plotMat[:] = 0
+for w1ind, w1 in enumerate(np.arange(0.01,0.99,(0.99-0.01)/numpts)):
+    for w2ind, w2 in enumerate(np.arange(0.01, 0.99, (0.99 - 0.01) / numpts)):
+        LLval = RetThreshBin(w1, w2, supRateLo, supRateLo, X, scDict)  # LL
+        LHval = RetThreshBin(w1, w2, supRateLo, supRateHi, X, scDict)  # LH
+        HHval = RetThreshBin(w1, w2, supRateHi, supRateHi, X, scDict)  # HH
+        if LLval + LHval + HHval == 0:
+            plotMat[w1ind, w2ind, 3] = 1
+        plotMat[w1ind, w2ind, 0] = LLval
+        if LLval == 0:
+            plotMat[w1ind, w2ind, 1] = LHval
+            if LHval == 0:
+                plotMat[w1ind, w2ind, 2] = HHval
+
+
+alval=0.5
+fig = plt.figure()
+# ax.set_title(rf"Equilibrium regions ($b=0.8,\ c_S={cS}$)", fontsize=12, pad=16)
+# fig.suptitle(r'$b=$'+str(b)+', '+r'$L=$'+str(supRateLo),fontsize=18, fontweight='bold')
+ax = fig.add_subplot(111)
+
+eqcolors = ['maroon', 'indigo', 'darkblue', 'dimgray']
+labels = ['LL', 'LH', 'HH', 'N']
+
+imlist = []
+for eqind in range(len(labels)):
+    mycmap = matplotlib.colors.ListedColormap(['white', eqcolors[eqind]], name='from_list', N=None)
+    # if eqcolors[eqind] == 'black':  # No alpha transparency
+    #     im = ax.imshow(eqStrat_matList[eqind], vmin=0, vmax=1, aspect='auto',
+    #                         extent=(0, CthetaMax, 0, cSupMax),
+    #                         origin="lower", cmap=mycmap, alpha=1)
+    # else:
+    im = ax.imshow(plotMat[:,:,eqind], vmin=0, vmax=1, aspect='auto',
+                            extent=(0, 1, 0, 1),
+                            origin="lower", cmap=mycmap, alpha=alval)
+    imlist.append(im)
+plt.ylim(0, 1.0)
+plt.xlim(0, 1.0)
+plt.text(0.8, 0.8, 'N', color='dimgray', fontsize=18)
+plt.text(0.55, 0.55, 'HH', color='dimgray', fontsize=18)
+plt.text(0.4, 0.4, 'LH', color='dimgray', fontsize=18)
+plt.text(0.25, 0.25, 'LL', color='dimgray', fontsize=18)
+plt.xlabel(r'$w_1$', fontsize=11)
+plt.ylabel(r'$w_2$', fontsize=11, rotation=0, labelpad=14)
+plt.savefig('retailerQualityThresholds.png', dpi=300, bbox_inches='tight')
+plt.show()
+
+#####################
+# Wholesale price plots WRT X,Y
+#####################
+b, cSup, supRateLo, supRateHi, inspSensRet, inspSensSup = 0.8, 0.05, 0.8, 1.0, 1.0, 1.0
+X, Y = 0.0, 0.0
+scDict = {'b': b, 'cSup': cSup, 'supRateLo': supRateLo, 'supRateHi': supRateHi,
+          'inspSensRet': inspSensRet, 'inspSensSup': inspSensSup}
+
+XLLUB, XLLsqzUB, XLHUB, XLHLB = XUBLL(scDict, Y), XUBLLsqz(scDict, Y), XUBLH(scDict, Y), XLBLHAtY0(scDict)
+XLHsqzUB, XHHLB = XUBLHsqzAtY0(scDict), XLBHHAtY0(scDict)
+# CthLHFOCLB, CthLHexpLB, CthLHFOCUB = CthetaLHFOCLB(scDict), CthetaLHexpIRLB(scDict), CthetaLHFOCUB(scDict)
+# (CthLHsqzUB, _), CthLHsqztwoUB, CthLLsqzUB = CthetaLHsqzUB(scDict), CthetaLHsqztwoUB(scDict), CthetaLLsqzUB(scDict)
+Xmax = 1.3*XHHLB
+Xvec = np.arange(0, Xmax, 0.001)
+LLprices = np.empty((Xvec.shape[0], 2))
 LLprices[:] = np.nan
-HHprices, HHsqzprices, LHexpprices, LHFOCprices = LLprices.copy(), LLprices.copy(), LLprices.copy(), LLprices.copy()
-LHsqzprices, LHsqztwoprices, LLsqzprices = LLprices.copy(), LLprices.copy(), LLprices.copy()
+HHprices, LHhldprices, LHprices, HHhldprices = LLprices.copy(), LLprices.copy(), LLprices.copy(), LLprices.copy()
+LHsqzprices, LLsqzprices = LLprices.copy(), LLprices.copy()
 # Store prices
-for Cthetaind in range(CthetaVec.shape[0]):
-    currCtheta = CthetaVec[Cthetaind]
-    if currCtheta <= CthLLUB:  # LL
-        LLprices[Cthetaind, :] = SupPriceLL(scDict, currCtheta)
-    if currCtheta > CthLLUB and currCtheta <= CthLLsqzUB:  # LL sqz
-        LLsqzprices[Cthetaind, :] = SupPriceLLSqz(scDict, currCtheta)
-    if currCtheta > CthLHexpLB and currCtheta < CthLHFOCLB:  # LHexpFOC
-        LHexpprices[Cthetaind, :] = SupPriceLHexpIR(scDict, currCtheta)
-    if currCtheta >= CthLHFOCLB and currCtheta <= CthLHFOCUB:  # LHFOC
-        LHFOCprices[Cthetaind, :] = SupPriceLHFOC(scDict, currCtheta)
-    if currCtheta > CthLHFOCUB and currCtheta <= CthLHsqzUB:  # LHsqz1
-        LHsqzprices[Cthetaind, :] = SupPriceLHSqz(scDict, currCtheta)
-    if currCtheta >= CthLHsqzUB and currCtheta <= CthLHsqztwoUB and currCtheta > CthLHFOCUB:  # LHsqz2
-        LHsqztwoprices[Cthetaind, :] = SupPriceLHSqzTwo(scDict, currCtheta)
-    if currCtheta >= CthHHsqzLB and currCtheta < CthHHLB:  # HHsqz
-        HHsqzprices[Cthetaind, :] = SupPriceHHsqz(scDict, currCtheta)
-    if currCtheta >= CthHHLB:
-        HHprices[Cthetaind, :] = SupPriceHH(scDict, currCtheta)
+for Xind in range(Xvec.shape[0]):
+    currX = Xvec[Xind]
+    if currX <= XLLUB:  # LL
+        LLprices[Xind, :] = PriceLL(scDict, X, Y)
+    if currX > XLLUB and currX <= XLLsqzUB:  # LL sqz
+        LLsqzprices[Xind, :] = PriceLLsqz(scDict, currX, Y)
+    # if currCtheta > CthLHexpLB and currCtheta < CthLHFOCLB:  # LHhld
+    #     LHexpprices[Cthetaind, :] = SupPriceLHexpIR(scDict, currCtheta)
+    if currX >= XLHLB and currX <= XLHUB:  # LH
+        LHprices[Xind, :] = PriceLH(scDict, currX, Y)
+    if currX > XLHUB and currX <= XLHsqzUB:  # LHsqz
+        LHsqzprices[Xind, :] = PriceLHsqz(scDict, currX, Y)
+    # if currCtheta >= CthHHsqzLB and currCtheta < CthHHLB:  # HHhld
+    #     HHsqzprices[Cthetaind, :] = SupPriceHHsqz(scDict, currCtheta)
+    if currX >= XHHLB:  # HH
+        HHprices[Xind, :] = PriceHH(scDict, currX, Y)
 
 fig = plt.figure()
-fig.suptitle(r'$b=$'+str(b)+', '+r'$c_S=$'+str(cSup)+', '+r'$L=$'+str(supRateLo),
-             fontsize=18, fontweight='bold')
+al = 0.9
+LLcol, LLsqzcol, HHcol, HHhldcol = 'red', 'deeppink', 'blue', 'cornflowerblue'
+LHcols = ['indigo', 'mediumorchid', 'mediumorchid']  # LHFOC, LHsqz, LHhld
+lnwd, textgap = 5, 0.015
 
-al = 0.8
-LLcol, LLsqzcol, HHcol, HHsqzcol = 'red', 'deeppink', 'indigo', 'mediumorchid'
-LHonecols = ['limegreen', 'seagreen', 'darkgreen']
-LHtwocols = ['cornflowerblue', 'blue', 'midnightblue']
-lnwd = 5
-
-plt.plot(CthetaVec, LLprices[:, 0], linewidth=lnwd, color=LLcol, alpha=al)
-plt.plot(CthetaVec, LLsqzprices[:, 0], linewidth=lnwd, color=LLsqzcol, alpha=al)
-# plt.plot(CthetaVec, LLprices[:, 1], linewidth=lnwd, color=LLcol, alpha=al)
-plt.plot(CthetaVec, LHexpprices[:, 0], linewidth=lnwd, color=LHtwocols[0], alpha=al)
-plt.plot(CthetaVec, LHexpprices[:, 1], linewidth=lnwd, color=LHonecols[0], alpha=al)
-plt.plot(CthetaVec, LHFOCprices[:, 0], linewidth=lnwd, color=LHtwocols[1], alpha=al)
-plt.plot(CthetaVec, LHFOCprices[:, 1], linewidth=lnwd, color=LHonecols[1], alpha=al)
-plt.plot(CthetaVec, LHsqzprices[:, 0], linewidth=lnwd, color=LHtwocols[2], alpha=al)
-plt.plot(CthetaVec, LHsqzprices[:, 1], linewidth=lnwd, color=LHonecols[2], alpha=al)
-plt.plot(CthetaVec, LHsqztwoprices[:, 0], linewidth=lnwd, color=LHtwocols[2], alpha=al)
-plt.plot(CthetaVec, LHsqztwoprices[:, 1], linewidth=lnwd, color=LHonecols[2], alpha=al)
-plt.plot(CthetaVec, HHsqzprices[:, 0], linewidth=lnwd, color=HHsqzcol, alpha=al)
-plt.plot(CthetaVec, HHsqzprices[:, 1], linewidth=lnwd, color=HHsqzcol, alpha=al)
-plt.plot(CthetaVec, HHprices[:, 0], linewidth=lnwd, color=HHcol, alpha=al)
-# plt.plot(CthetaVec, HHprices[:, 1], linewidth=lnwd, color=HHcol, alpha=al)
-plt.ylim(0, 1.0)
-plt.xlim(0, CthetaMax)
-plt.xlabel(r'$C_{\theta}$', fontsize=14)
-plt.ylabel(r'$w$', fontsize=14, rotation=0, labelpad=14)
+plt.plot(Xvec, LLprices[:, 0], linewidth=lnwd, color=LLcol, alpha=al)
+plt.plot(Xvec, LLsqzprices[:, 0], linewidth=lnwd, color=LLsqzcol, alpha=al)
+# plt.plot(Xvec, LHhldprices[:, 0], linewidth=lnwd, color=LHcols[2], alpha=al)
+# plt.plot(Xvec, LHhldprices[:, 1], type='--', linewidth=lnwd, color=LHcols[0], alpha=al)
+plt.plot(Xvec, LHprices[:, 0], linewidth=lnwd, color=LHcols[0], alpha=al)
+plt.plot(Xvec, LHprices[:, 1], '--', linewidth=lnwd, color=LHcols[0], alpha=al)
+plt.plot(Xvec, LHsqzprices[:, 0], linewidth=lnwd, color=LHcols[1], alpha=al)
+plt.plot(Xvec, LHsqzprices[:, 1], '--', linewidth=lnwd, color=LHcols[1], alpha=al)
+# plt.plot(Xvec, HHhldprices[:, 0], linewidth=lnwd, color=HHsqzcol, alpha=al)
+# plt.plot(Xvec, HHhldprices[:, 1], linewidth=lnwd, color=HHsqzcol, alpha=al)
+plt.plot(Xvec, HHprices[:, 0], linewidth=lnwd, color=HHcol, alpha=al)
+plt.ylim(0, 0.4)
+plt.xlim(0, Xmax)
+plt.xlabel(r'$X$', fontsize=11)
+plt.ylabel(r'$w$', fontsize=11, rotation=0, labelpad=14)
+plt.text(0.09, LLprices[0, 0]+textgap, r'$LL$ (FOC)', color=LLcol, fontsize=14)
+plt.text(0.4-textgap, LLsqzprices[660, 0], r'$LL$ (sqz)', color=LLsqzcol, fontsize=14)
+plt.text(0.78-textgap, LHsqzprices[1050, 0], r'$LH$ (sqz)', color=LHcols[1], fontsize=14)
+plt.text(0.63, LHprices[700, 1]+textgap, r'$LH$ (FOC)', color=LHcols[0], fontsize=14)
+plt.text(1.07, HHprices[-1, 0]+textgap, r'$HH$ (FOC)', color=HHcol, fontsize=14)
+plt.text(XLHsqzUB+textgap, LHsqzprices[1100, 0]-textgap, r'Supplier 1', color='black', fontsize=8, fontstyle='italic')
+plt.text(XLHsqzUB+textgap, LHsqzprices[1100, 1]-textgap, r'Supplier 2', color='black', fontsize=8, fontstyle='italic')
+plt.savefig('priceWRTX.png', dpi=300, bbox_inches='tight')
 plt.show()
+
+# Repeat WRT Y
+YLLUB, YLHUB, YLHLB = YUBLL(scDict, X), YUBLH(scDict, X), YLBLHIC(scDict, X)
+YLHhldLB, YHHLB, YHHhldLB = YLBLHhldAtX0(scDict), YLBHHIC(scDict, X), YLBHHhld(scDict, X)
+
+Ymax = 1.3*YHHLB
+Yvec = np.arange(0, Ymax, 0.001)
+LLprices = np.empty((Yvec.shape[0], 2))
+LLprices[:] = np.nan
+HHprices, LHhldprices, LHprices, HHhldprices = LLprices.copy(), LLprices.copy(), LLprices.copy(), LLprices.copy()
+# LHsqzprices, LLsqzprices = LLprices.copy(), LLprices.copy()
+# Store prices
+for Yind in range(Yvec.shape[0]):
+    currY = Yvec[Yind]
+    if currY <= YLLUB:  # LL
+        LLprices[Yind, :] = PriceLL(scDict, X, currY)
+    if currY > YLHhldLB and currY < YLHLB:  # LHhld
+        LHhldprices[Yind, :] = PriceLHhld(scDict, X, currY)
+    if currY >= YLHLB and currY <= YLHUB:  # LH
+        LHprices[Yind, :] = PriceLH(scDict, X, currY)
+    if currY >= YHHhldLB and currY < YHHLB:  # HHhld
+        HHhldprices[Yind, :] = PriceHHhld(scDict, X, currY)
+    if currY >= YHHLB:  # HH
+        HHprices[Yind, :] = PriceHH(scDict, X, currY)
+
+fig = plt.figure()
+al = 0.9
+LLcol, LLsqzcol, HHcol, HHhldcol = 'red', 'deeppink', 'blue', 'cornflowerblue'
+LHcols = ['indigo', 'mediumorchid', 'mediumorchid']  # LHFOC, LHsqz, LHhld
+lnwd, textgap = 5, 0.0015
+
+plt.plot(Yvec, LLprices[:, 0], linewidth=lnwd, color=LLcol, alpha=al)
+plt.plot(Yvec, LHhldprices[:, 0], linewidth=lnwd, color=LHcols[2], alpha=al)
+plt.plot(Yvec, LHhldprices[:, 1], '--', linewidth=lnwd, color=LHcols[2], alpha=al)
+plt.plot(Yvec, LHprices[:, 0], linewidth=lnwd, color=LHcols[0], alpha=al)
+plt.plot(Yvec, LHprices[:, 1], '--', linewidth=lnwd, color=LHcols[0], alpha=al)
+plt.plot(Yvec, HHhldprices[:, 0], linewidth=lnwd, color=HHhldcol, alpha=al)
+plt.plot(Yvec, HHhldprices[:, 1], linewidth=lnwd, color=HHhldcol, alpha=al)
+plt.plot(Yvec, HHprices[:, 0], linewidth=lnwd, color=HHcol, alpha=al)
+plt.ylim(0, 0.4)
+plt.xlim(0, Ymax)
+plt.xlabel(r'$Y$', fontsize=11)
+plt.ylabel(r'$w$', fontsize=11, rotation=0, labelpad=14)
+plt.text(0.002, 0.18, r'$LL$ (FOC)', color=LLcol, fontsize=14)
+plt.text(0.035, 0.295, r'$LH$ (hld)', color=LHcols[2], fontsize=14)
+plt.annotate('', xy=(0.05, 0.20), xytext=(0.042, 0.28), arrowprops=dict(arrowstyle="->",
+                                        color = LHcols[2]))
+plt.text(0.045, 0.355, r'$LH$ (FOC)', color=LHcols[0], fontsize=14)
+plt.annotate('', xy=(0.056, 0.21), xytext=(0.052, 0.35), arrowprops=dict(arrowstyle="->",
+                                        color = LHcols[0]))
+plt.text(0.061, 0.22, r'$HH$ (FOC)', color=HHcol, fontsize=14)
+plt.annotate('', xy=(0.05, 0.20), xytext=(0.042, 0.28), arrowprops=dict(arrowstyle="->",
+                                        color = LHcols[2]))
+plt.text(0.06, 0.09, r'$HH$ (hld)', color=HHhldcol, fontsize=14)
+plt.annotate('', xy=(0.059, 0.19), xytext=(0.066, 0.108), arrowprops=dict(arrowstyle="->",
+                                        color = HHhldcol))
+plt.text(0.039, 0.13, r'Supplier 1', color='black', fontsize=8, fontstyle='italic')
+plt.text(0.039, 0.18, r'Supplier 2', color='black', fontsize=8, fontstyle='italic')
+plt.savefig('priceWRTY.png', dpi=300, bbox_inches='tight')
+plt.show()
+
+
+
+
+
+
+
+
+
 
 #####################
 # Equilibrium plots

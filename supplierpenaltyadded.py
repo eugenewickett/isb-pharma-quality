@@ -18,7 +18,7 @@ from numpy.core.multiarray import ndarray
 import matplotlib.pyplot as plt
 
 np.set_printoptions(precision=3, suppress=True)
-plt.rcParams["font.family"] = "monospace"
+plt.rcParams["font.family"] = "serif"
 
 def find_nearest(array, value):
     array = np.asarray(array)
@@ -900,8 +900,9 @@ def SocWelEqMatsForPlotIgnorePens(numpts, Ctheta_max, Cbeta_max, uH, uL, scDict)
 def GetYHHLB(scDict, Xmax, numpts=1000):
     # Returns a vector of Y points signifying the HHFOC lower bound for the X vector from 0 to Xmax
     b, cS, supRateHi, supRateLo = scDict['b'], scDict['cSup'], scDict['supRateHi'], scDict['supRateLo']
-    rhoSup, rhoRet = scDict['rhoSup'], scDict['rhoRet']
+    # rhoSup, rhoRet = scDict['rhoSup'], scDict['rhoRet']
     Xvec = np.arange(0, Xmax, Xmax/numpts)
+    XdualBD = XHHDualLB(scDict)
     Yvec = []
     # First check if wHHIC is valid WRT wHHDual at the YHHIC bound
     if cS > cSHHICbound(b):
@@ -918,8 +919,11 @@ def GetYHHLB(scDict, Xmax, numpts=1000):
         XICUB = XHHIC(scDict)
         for currX in Xvec:
             if currX <= XICUB:
-                
-
+                Yvec.append(YICLB)
+            elif currX <= XdualBD:
+                Yvec.append(YHHIRLB(scDict, currX))
+            else:
+                Yvec.append(-1)
     return Yvec
 
 #######################
@@ -975,6 +979,106 @@ ax.set_ybound(0, Cbeta_max)
 ax.set_box_aspect(1)
 plt.xlabel(r'$X$', fontsize=14)
 plt.ylabel(r'$Y$', fontsize=14, rotation=0, labelpad=14)
+plt.show()
+
+#######################
+# HHFOC Boundary Plots for Case Study
+#######################
+b, cSup, supRateLo, supRateHi, rhoSup, rhoRet = 0.8, 0.2, 0.8, 1.0, 0.8, 0.2
+scDictCough = {'b': b, 'cSup': cSup, 'supRateLo': supRateLo, 'supRateHi': supRateHi, 'rhoSup':rhoSup, 'rhoRet':rhoRet}
+b, cSup, supRateLo, supRateHi, rhoSup, rhoRet = 0.8, 0.05, 0.8, 1.0, 0.8, 0.8
+scDictParac = {'b': b, 'cSup': cSup, 'supRateLo': supRateLo, 'supRateHi': supRateHi, 'rhoSup':rhoSup, 'rhoRet':rhoRet}
+b, cSup, supRateLo, supRateHi, rhoSup, rhoRet = 0.8, 0.15, 0.8, 1.0, 0.8, 0.2
+scDictCoughInterv = {'b': b, 'cSup': cSup, 'supRateLo': supRateLo, 'supRateHi': supRateHi, 'rhoSup':rhoSup, 'rhoRet':rhoRet}
+XmaxParac, XmaxCough = 1.8, 5.0
+numpts = 1000
+XCough, XParac = np.arange(0, XmaxCough, XmaxCough/numpts), np.arange(0, XmaxParac, XmaxParac/numpts)
+
+XAct, YAct = 3*0.06, 3*0.06
+
+YCough = GetYHHLB(scDictCough, XmaxCough, numpts=numpts)
+YParac = GetYHHLB(scDictParac, XmaxParac, numpts=numpts)
+
+csReducYbd = YHHICLB(scDictCoughInterv)
+XInt, YInt = 3*0.06, 3*0.08
+
+al, fillal, supSize, lnwd, labmult = 0.9, 0.3, 18, 5, 1.08
+bdColor, fillcolor = 'midnightblue', 'cornflowerblue'
+
+# Cough Syrup
+fig = plt.figure()
+fig.suptitle('Cough Syrup', fontsize=supSize, )
+# LLonecol, LLtwocol, HHonecol, HHtwocol = 'red', 'deeppink', 'indigo', 'mediumorchid'
+# LLsqzonecol, LLsqztwocol, HHexponecol, HHexptwocol = 'darkorange', 'bisque', 'sienna', 'sandybrown'
+# LHonecols = ['limegreen', 'seagreen', 'darkgreen']
+# LHtwocols = ['cornflowerblue', 'blue', 'midnightblue']
+
+line1, = plt.plot(XCough, YCough, linewidth=lnwd, color=bdColor, alpha=al, label='HH boundary')
+plt.fill_between(XCough, YCough, 1.0, color=fillcolor, alpha = fillal)
+plt.plot(XAct, YAct, marker='o', color='black', markersize=9)
+plt.text(XAct*labmult, YAct*labmult, r'$(X_{act},Y_{act})$', fontsize=10)
+plt.legend(handles=[line1], bbox_to_anchor=(0.97, 0.97), borderpad=0.8,
+           loc='upper right', fontsize=8)
+# # plt.plot(XVec, LLprices[:, 1], linewidth=lnwd, color=LLtwocol, alpha=al)
+# plt.plot(XVec, LLsqzprices[:, 0], linewidth=lnwd, color=LLsqzonecol, alpha=al)
+# # plt.plot(XVec, LLsqzprices[:, 1], linewidth=lnwd, color=LLsqztwocol, alpha=al)
+# plt.plot(XVec, HHexpprices[:, 0], linewidth=lnwd, color=HHtwocol, alpha=al)
+# plt.plot(XVec, HHprices[:, 0], linewidth=lnwd, color=HHonecol, alpha=al)
+# plt.plot(XVec, LHexpprices[:, 0], linewidth=lnwd, linestyle='dashed', color=LHtwocols[0], alpha=al)
+# plt.plot(XVec, LHexpprices[:, 1], linewidth=lnwd, color=LHonecols[0], alpha=al)
+# plt.plot(XVec, LHFOCprices[:, 0], linewidth=lnwd, linestyle='dashed', color=LHtwocols[1], alpha=al)
+# plt.plot(XVec, LHFOCprices[:, 1], linewidth=lnwd, color=LHonecols[1], alpha=al)
+# plt.plot(XVec, LHsqzprices[:, 0], linewidth=lnwd, linestyle='dashed', color=LHtwocols[2], alpha=al)
+# plt.plot(XVec, LHsqzprices[:, 1], linewidth=lnwd, color=LHonecols[2], alpha=al)
+plt.ylim(0, 0.5)
+# plt.ylim(0, np.max((np.nanmax(HHprices),np.nanmax(HHexpprices)))*1.2)
+plt.xlim(0, XmaxCough)
+plt.xlabel(r'$X$', fontsize=14)
+plt.ylabel(r'$Y$', fontsize=14, rotation=0, labelpad=14)
+plt.savefig('CS_cough_baseline.png', dpi=300, bbox_inches='tight')
+plt.show()
+
+# Paracetamol
+fig = plt.figure()
+fig.suptitle('Paracetamol', fontsize=supSize)
+line1, = plt.plot(XParac, YParac, linewidth=lnwd, color=bdColor, alpha=al, label='HH boundary')
+plt.fill_between(XParac, YParac, 1.0, color=fillcolor, alpha = fillal)
+plt.plot(XAct, YAct, marker='o', color='black', markersize=9)
+plt.text(XAct*labmult, YAct*labmult, r'$(X_{act},Y_{act})$', fontsize=10)
+plt.legend(handles=[line1], bbox_to_anchor=(0.97, 0.97), borderpad=0.8,
+           loc='upper right', fontsize=8)
+plt.ylim(0, 0.5)
+plt.xlim(0, XmaxParac)
+plt.xlabel(r'$X$', fontsize=14)
+plt.ylabel(r'$Y$', fontsize=14, rotation=0, labelpad=14)
+plt.savefig('CS_parac_baseline.png', dpi=300, bbox_inches='tight')
+plt.show()
+
+# Cough Syrup - Interventions
+arrowXLoc = 0.8
+fig = plt.figure()
+fig.suptitle('Cough Syrup, with Interventions', fontsize=supSize, )
+
+plt.axhline(csReducYbd, color='darkgray', alpha=al, linewidth=lnwd*0.7, linestyle='--')
+line1, = plt.plot(XCough, YCough, linewidth=lnwd, color=bdColor, alpha=al, label='HH boundary')
+plt.fill_between(XCough, YCough, 1.0, color=fillcolor, alpha = fillal)
+plt.plot(XAct, YAct, marker='o',markerfacecolor='none', markeredgecolor='gray', markersize=9)
+plt.plot(XInt, YInt, marker='o', color='black',  markersize=9)
+plt.legend(handles=[line1], bbox_to_anchor=(0.97, 0.97), borderpad=0.8,
+           loc='upper right', fontsize=8)
+plt.annotate('', xytext=(XAct,YAct*1.05), xy=(XInt,YInt*0.96),
+             arrowprops=dict(arrowstyle='-|>',color='darkgreen'))
+plt.annotate('', xytext=(arrowXLoc, YCough[10]*0.98), xy=(arrowXLoc, csReducYbd*1.02),
+             arrowprops=dict(arrowstyle='-|>',color='darkred'))
+plt.text(XAct*labmult*1.1, YAct*labmult*1.03, r'$\theta_S:0.06\rightarrow0.08$', fontsize=8,
+         color='darkgreen')
+plt.text(arrowXLoc*labmult, csReducYbd*labmult*labmult, r'$c_S:0.20\rightarrow0.15$', fontsize=8,
+         color='darkred')
+plt.ylim(0, 0.5)
+plt.xlim(0, XmaxCough)
+plt.xlabel(r'$X$', fontsize=14)
+plt.ylabel(r'$Y$', fontsize=14, rotation=0, labelpad=14)
+plt.savefig('CS_cough_intervention.png', dpi=300, bbox_inches='tight')
 plt.show()
 
 #######################
