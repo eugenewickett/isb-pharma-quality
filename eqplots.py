@@ -797,8 +797,8 @@ def CheckLHexpIR(scDict, X, Y, tol=1E-5, printUpdate=False):
 
 
 ### DERIVED BOUNDARIES
-def LLbdY(scDict):
-    # LLFOC UB in Y
+# def LLbdY(scDict):
+#     # LLFOC UB in Y
 
 
 ### PLOTTING FUNCTIONS

@@ -37,15 +37,59 @@ def SocWel(uH, uL, q1, q2, cSup1, cSup2, lambsup1, lambsup2, Ctheta):
     return q1*(uH*(lambsup1)+uL*(1-lambsup1)-cSup1) + q2*(uH*(lambsup2)+uL*(1-lambsup2)-cSup2) -\
         Ctheta*(1-lambsup1*lambsup2)
 
+def invPrice(qi, qj, b):
+    return 1 - qi - b*qj
+
+def RetOptQuants(retStrat, b, cRet, priceSup_1, priceSup_2):
+    # retStrat is 1 of the 7 possible retailer strategies under the quality extension
+    if retStrat == 0:  # h12
+        numer1, denom1 = ((1-b)*(1-cRet)) - priceSup_1 + b*priceSup_2, 2*(1-(b**2))
+        numer2, denom2 = (1 - b) * (1 - cRet) - priceSup_2 + b*priceSup_1, 2 * (1 - (b ** 2))
+        q1, q2 = numer1 / denom1, numer2 / denom2
+    elif retStrat == 1:  # l12
+        numer1, denom1 = (1 - b) - priceSup_1 + b * priceSup_2, 2 * (1 - (b ** 2))
+        numer2, denom2 = (1 - b) - priceSup_2 + b * priceSup_1, 2 * (1 - (b ** 2))
+        q1, q2 = numer1 / denom1, numer2 / denom2
+    elif retStrat == 2:  # h1
+        q1, q2 = (1-priceSup_1-cRet)/2, 0
+    elif retStrat == 3:  # l1
+        q1, q2 = (1-priceSup_1)/2, 0
+    elif retStrat == 4:  # h2
+        q1, q2 = 0, (1-priceSup_2-cRet)/2
+    elif retStrat == 5:  # l1
+        q1, q2 = 0, (1-priceSup_2)/2
+    else:
+        q1, q2 = 0, 0
+    return q1, q2
+
 # Function returning retailer utilities under each of 7 possible policies
-def RetUtil(lambsup1, lambsup2, Ltheta, b, w1, w2):
-    # Returns retailer utility under pi=D
-    q1 = max((1 - b - w1 + b * w2) / (2 * (1 - (b ** 2))), 0)
-    q2 = max((1 - b - w2 + b * w1) / (2 * (1 - (b ** 2))), 0)
-    retval = (1 - b - w1 + b*w2) * (1 - w1 - b*q2 - q1) / (2 * (1 - b ** 2)) + \
-                     (1 - b + b*w1 - w2) * (1 - w2 - b*q1 - q2) / (2 * (1 - b ** 2)) - \
-                     Ltheta * ((1 - lambsup1 * lambsup2))
+def RetUtil(X, scDict, RetQualBin, rateSup_1, rateSup_2,  q1, q2):
+    cRet, priceSup_2, priceSup_1 = scDict['cRet'], scDict['priceSup_2'], scDict['priceSup_1']
+    b = scDict['b']
+    rateRetLo, rateRetHi, inspSensRet = scDict['rateRetLo'], scDict['rateRetHi'], scDict['inspSensRet']
+    # Returns retailer utility
+    # Get detection rate
+    if RetQualBin == 1:
+        rateRet = rateRetHi
+        investRet = cRet
+    else:
+        rateRet = rateRetLo
+        investRet = 0
+    if q1 > 0 and q2 > 0:
+        detectRate = 1 - rateRet * rateSup_1 * rateSup_2
+    elif q1 > 0 and q2 == 0:
+        detectRate = 1 - rateRet * rateSup_1
+    elif q2 > 0 and q1 == 0:
+        detectRate = 1 - rateRet * rateSup_2
+    else:
+        detectRate = 0
+
+
+    profit1 = q1 * (invPrice(q1, q2, b) - priceSup_1 - investRet)
+    profit2 = q2 * (invPrice(q2, q1, b) - priceSup_2 - investRet)
+    retval = profit1 + profit2 - (X * inspSensRet * detectRate)
     return retval
+
 
 def SupPriceLL(scDict, Ctheta):
     # Returns on-path LL prices
@@ -993,9 +1037,72 @@ def XLBHHJunc(scDict, step=0.001):
             currX = currX + step
     return currX
 
+def XHHDualLB(scDict):
+    # Returns the X bound s.t. the wHHDual off-path price is retIR valid
+    # wHHDual is a floor on the off-path HH price; thus, X cannot be an HHLB for X larger than this X bound, as that
+    #   would imply the use of a lower off-path price than this floor
+    b, cS, supRateHi, supRateLo = scDict['b'], scDict['cSup'], scDict['supRateHi'], scDict['supRateLo']
+    inspSensSup, inspSensRet = scDict['inspSensSup'], scDict['inspSensRet']
+    lb = (1 - cS)**2 / (4*(2 - b)**2 * b**2 * (1 - supRateHi*supRateLo) * inspSensRet)
+    return lb
 
-b, cSup, supRateLo = 0.5, 0.2, 0.8
-scDict = {'b': b, 'cSup': cSup, 'supRateLo': supRateLo}
+def cSHHICbound(b):
+    return (2*(-1 + b))/(-2 + (b**2))
+
+def YHHICLB(scDict):
+    # Returns the Y bound s.t. supIC off-path move is real-valued for Cbeta below this bound
+    b, cS, supRateHi, supRateLo = scDict['b'], scDict['cSup'], scDict['supRateHi'], scDict['supRateLo']
+    inspSensSup, inspSensRet = scDict['inspSensSup'], scDict['inspSensRet']
+    lb = (cS * (4 - 2*cS + b * (-4 + 3*cS))) / (8 * (-2 + b) * (-1 + b) * (1 + b) * (supRateHi -
+            supRateLo) * inspSensSup)
+    return lb
+
+def XHHIC(scDict):
+    # Returns the X bound s.t. supIC off-path move is no longer retIR valid for X above this bound
+    b, cS, supRateHi, supRateLo = scDict['b'], scDict['cSup'], scDict['supRateHi'], scDict['supRateLo']
+    inspSensSup, inspSensRet = scDict['inspSensSup'], scDict['inspSensRet']
+    lb = (8 + 4*b*(-2 + cS) + b**2*(4 - 3*cS)*cS + 4*(-2 + cS)*cS) / (16 * (-2 + b)**2 * (-1 + b**2) * (-1 +
+            supRateHi * supRateLo) * inspSensRet)
+    return lb
+
+def YHHIRLB(scDict, X):
+    # Returns the Y bound s.t. supICoff=IRoff at given X
+    b, cS, supRateHi, supRateLo = scDict['b'], scDict['cSup'], scDict['supRateHi'], scDict['supRateLo']
+    inspSensSup, inspSensRet = scDict['inspSensSup'], scDict['inspSensRet']
+    sqrt_term = sqroot(((-1 + cS) ** 2 + 4 * (-2 + b) ** 2 * X * (-1 + supRateHi * supRateLo) * inspSensRet) / (
+                (-2 + b) ** 2 * (-1 + b ** 2)))
+    lb = (2*b*(-1 + cS)*(-1 + cS + sqrt_term) + 4*(4*X*(-1 + supRateHi*supRateLo)*inspSensRet + sqrt_term) + b**2*(-12*X*(-1
+        + supRateHi*supRateLo)*inspSensRet + (-4 + cS)*sqrt_term) + b**3*(4*X*(-1 + supRateHi*supRateLo)*inspSensRet -
+        (-2 + cS)*sqrt_term)) / (2*(-2 + b)**2*(1 + b)*(supRateHi - supRateLo)*inspSensSup)
+    return lb
+
+def GetYHHLB(scDict, Xmax, numpts=1000):
+    # Returns a vector of Y points signifying the HHFOC lower bound for the X vector from 0 to Xmax
+    b, cS, supRateHi, supRateLo = scDict['b'], scDict['cSup'], scDict['supRateHi'], scDict['supRateLo']
+    Xvec = np.arange(0, Xmax, Xmax/numpts)
+    XdualBD = XHHDualLB(scDict)
+    Yvec = []
+    # First check if wHHIC is valid WRT wHHDual at the YHHIC bound
+    if cS > cSHHICbound(b):
+        # Use dual bound
+        XLB = XHHDualLB(scDict)
+        for currX in Xvec:
+            if currX <= XLB:
+                Yvec.append(XLB)
+            else:
+                Yvec.append(0)
+    else:
+        # Use IC bound
+        YICLB = YHHICLB(scDict)
+        XICUB = XHHIC(scDict)
+        for currX in Xvec:
+            if currX <= XICUB:
+                Yvec.append(YICLB)
+            elif currX <= XdualBD:
+                Yvec.append(YHHIRLB(scDict, currX))
+            else:
+                Yvec.append(-1)
+    return Yvec
 
 #####################
 # Retailer dual-sourcing validity
@@ -1193,10 +1300,10 @@ plt.show()
 #####################
 # Equilibrium plots
 #####################
-b, cSup, supRateLo, supRateHi, inspSensRet, inspSensSup = 0.8, 0.05, 0.8, 1.0, 1.0, 1.0
+b, cSup, supRateLo, supRateHi, inspSensRet, inspSensSup = 0.8, 0.1, 0.8, 1.0, 1.0, 1.0
 scDict = {'b': b, 'cSup': cSup, 'supRateLo': supRateLo, 'supRateHi': supRateHi,
           'inspSensRet': inspSensRet, 'inspSensSup': inspSensSup}
-Xmax, Ymax, step = 1.4, 0.08, 0.001
+Xmax, Ymax, step, Kpen = 1.4, 0.15, 0.001, 3
 Xvec = np.arange(0, Xmax, step)
 YvecLL, YvecLHlo, YvecLHhi, YvecHH = [], [], [], []
 # Define breakpoints and Y bounds that are not a function of X
@@ -1228,42 +1335,459 @@ for Xind in range(Xvec.shape[0]):
     else:
         YvecHH.append(YLBHHIR(scDict, currX))
 
+# Adjust to switch to inspection probabilities
+# Xvec = Xvec / Kpen
+# YvecLL = [YvecLL[i]/Kpen for i in range(len(YvecLL))]
+# YvecLHlo = [YvecLHlo[i]/Kpen for i in range(len(YvecLHlo))]
+# YvecLHhi = [YvecLHhi[i]/Kpen for i in range(len(YvecLHhi))]
+# YvecHH = [YvecHH[i]/Kpen for i in range(len(YvecHH))]
+Kpen =1
+
 alval, lnwd = 0.6, 3
 LLcol, LHcol, HHcol = 'red', 'purple', 'mediumblue'
 
-labels = ['LL', 'LH', 'HH', 'LL'+r'$\cap$'+'LH', 'LH'+r'$\cap$'+'HH']
+labels = ['LL feasible', 'LH feasible', 'HH feasible', 'LL'+r'$\cap$'+'LH', 'LH'+r'$\cap$'+'HH']
+colList = [LLcol, LHcol, HHcol]
 plt.rcParams['hatch.linewidth'] = 2.3
 
 fig = plt.figure()
-# fig.suptitle(r'$b=$'+str(b)+', '+r'$L=$'+str(supRateLo),fontsize=18, fontweight='bold')
 ax = fig.add_subplot(111)
 plt.plot(Xvec, YvecLL, linewidth=lnwd, color=LLcol, alpha=alval)
 plt.plot(Xvec, YvecLHlo, linewidth=lnwd, color=LHcol, alpha=alval)
 plt.plot(Xvec, YvecLHhi, linewidth=lnwd, color=LHcol, alpha=alval)
 plt.plot(Xvec, YvecHH, linewidth=lnwd, color=HHcol, alpha=alval)
-legwidth = 20
-wraplabels = ['\n'.join(textwrap.wrap(labels[i], width=legwidth)) for i in range(len(labels))]
-patches = [mpatches.Patch(color=eqcolors[i], edgecolor='black', label=wraplabels[i], alpha=alval) for i in range(len(eqcolors))]
-# # put those patched as legend-handles into the legend
-# ax.legend(handles=patches, bbox_to_anchor=(1.3, 1.0), loc='upper right', borderaxespad=0.1, fontsize=8)
-# ax.set_box_aspect(1)
+patches = [mpatches.Patch(color=colList[i], label=labels[i], alpha=alval*0.5) for i in range(len(colList))]
+patches.append(mpatches.Patch(facecolor=LLcol, edgecolor=LHcol,hatch='////',alpha=alval*0.4,label=labels[3]))
+patches.append(mpatches.Patch(facecolor=HHcol, edgecolor=LHcol,hatch='////',alpha=alval*0.4,label=labels[4]))
+ax.legend(handles=patches, loc='upper right', borderaxespad=0.4, fontsize=8)
 plt.fill_between(Xvec, YvecLHlo, YvecLL, hatch='////', facecolor=LLcol, edgecolor=LHcol, alpha=alval*0.2)
 plt.fill_between(Xvec, YvecLL, np.repeat(-1, len(YvecLL)), facecolor=LLcol, alpha=alval*0.3)
 plt.fill_between(Xvec, YvecLL, YvecLHhi, facecolor=LHcol, alpha=alval*0.3)
 plt.fill_between(Xvec, YvecLHhi, np.repeat(1, len(YvecLHhi)), facecolor=HHcol, alpha=alval*0.3)
 plt.fill_between(Xvec, YvecLHhi, YvecHH, hatch='////', facecolor=HHcol, edgecolor=LHcol, alpha=alval*0.2)
+plt.text((Xmax*0.15)/Kpen, Ymax*0.2/Kpen, 'LL', color=LLcol, fontsize=15, fontweight='bold')
+plt.text(0.4/Kpen, (Ymax*0.87)/Kpen, 'HH', color=HHcol, fontsize=15, fontweight='bold')
+plt.text(Xmax*0.5/Kpen, Ymax*0.6/Kpen, 'LH', color=LHcol, fontsize=15, fontweight='bold')
+plt.text(Xmax*0.39/Kpen, Ymax*0.01/Kpen, 'LL\n'+r'$\cap$'+'\nLH', color='black', fontsize=15, fontweight='bold',
+         horizontalalignment='center', alpha=0.7)
+plt.annotate('', xy=(0.59/Kpen, 0.01/Kpen), xytext=(0.65/Kpen, 0.013/Kpen), arrowprops=dict(arrowstyle="-", color='black'))
+plt.text(Xmax*0.71/Kpen, Ymax*0.01/Kpen, 'LH\n'+r'$\cap$'+'\nHH', color='black', fontsize=15, fontweight='bold',
+         horizontalalignment='center', alpha=0.7)
+plt.annotate('', xy=(1.04/Kpen, 0.01/Kpen), xytext=(1.10/Kpen, 0.013/Kpen), arrowprops=dict(arrowstyle="-", color='black'))
+ax.set_xbound(0, Xmax/Kpen)
+ax.set_ybound(0, Ymax/Kpen)
+# plt.xlabel(r'$\theta^{\text{R}}$', fontsize=11)
+# plt.ylabel(r'$\theta^{\text{S}}$', fontsize=11, rotation=0, labelpad=14)
 plt.xlabel(r'$X$', fontsize=11)
 plt.ylabel(r'$Y$', fontsize=11, rotation=0, labelpad=14)
-plt.text(0.2, 0.02, 'LL', color=LLcol, fontsize=15, fontweight='bold')
-plt.text(0.4, 0.07, 'HH', color=HHcol, fontsize=15, fontweight='bold')
-plt.text(0.73, 0.04, 'LH', color=LHcol, fontsize=15, fontweight='bold')
-plt.text(0.64, 0.006, 'LL\n'+r'$\cap$'+'\nLH', color='black', fontsize=15, fontweight='bold',
-         horizontalalignment='center', alpha=0.7)
-plt.text(1.075, 0.006, 'LH\n'+r'$\cap$'+'\nHH', color='black', fontsize=15, fontweight='bold',
-         horizontalalignment='center', alpha=0.7)
-ax.set_xbound(0, Xmax)
-ax.set_ybound(0, Ymax)
+plt.savefig('eqplot_example.png', dpi=300, bbox_inches='tight')
 plt.show()
+
+#######################
+# HHFOC Boundary Plots for Case Study
+#######################
+b, cSup, supRateLo, supRateHi, inspSensSup, inspSensRet = 0.8, 0.2, 0.8, 1.0, 0.85, 0.2
+scDictCough = {'b': b, 'cSup': cSup, 'supRateLo': supRateLo, 'supRateHi': supRateHi,
+               'inspSensSup':inspSensSup, 'inspSensRet':inspSensRet}
+b, cSup, supRateLo, supRateHi, inspSensSup, inspSensRet = 0.8, 0.05, 0.8, 1.0, 0.85, 0.8
+scDictParac = {'b': b, 'cSup': cSup, 'supRateLo': supRateLo, 'supRateHi': supRateHi,
+               'inspSensSup':inspSensSup, 'inspSensRet':inspSensRet}
+b, cSup, supRateLo, supRateHi, inspSensSup, inspSensRet = 0.8, 0.15, 0.8, 1.0, 0.85, 0.2
+scDictCoughInterv = {'b': b, 'cSup': cSup, 'supRateLo': supRateLo, 'supRateHi': supRateHi,
+                     'inspSensSup':inspSensSup, 'inspSensRet':inspSensRet}
+Kpen = 3.0
+XmaxParac, XmaxCough = 1.8, 5.0
+numpts = 1000
+XCough, XParac = np.arange(0, XmaxCough, XmaxCough/numpts), np.arange(0, XmaxParac, XmaxParac/numpts)
+
+XAct, YAct = Kpen*0.06, Kpen*0.06
+
+YCough = GetYHHLB(scDictCough, XmaxCough, numpts=numpts)
+YParac = GetYHHLB(scDictParac, XmaxParac, numpts=numpts)
+
+csReducYbd = YHHICLB(scDictCoughInterv)
+XInt, YInt = Kpen*0.06, Kpen*0.08
+
+al, fillal, supSize, lnwd, labmult, labmult2 = 0.9, 0.3, 18, 5, 1.25, 0.88
+bdColor, fillcolor = 'midnightblue', 'cornflowerblue'
+
+# Adjust to inspection probability space
+XAct, YAct = XAct/Kpen, YAct/Kpen
+XInt, YInt = XInt/Kpen, YInt/Kpen
+XCough, YCough = XCough/Kpen, np.array(YCough)/Kpen
+XParac, YParac = XParac/Kpen, np.array(YParac)/Kpen
+XmaxCough = XmaxCough / Kpen
+csReducYbd = csReducYbd / Kpen
+
+# Cough Syrup
+arrowXLoc = 0.3
+fig = plt.figure()
+fig.suptitle('Cough Syrup', fontsize=supSize, )
+line1, = plt.plot(XCough, YCough, linewidth=lnwd, color=bdColor, alpha=al, label='HH boundary, actual')
+plt.fill_between(XCough, YCough, 1.0, color=fillcolor, alpha = fillal)
+line2 = plt.axhline(csReducYbd, color='darkgray', alpha=al, linewidth=lnwd*0.7, linestyle='--',
+            label='HH boundary, PLI')
+plt.plot(XAct, YAct, marker='o', color='black', markersize=9)
+plt.plot(XInt, YInt, marker='o',markerfacecolor='none', markeredgecolor='black', markersize=9,
+         markeredgewidth=2) # new location
+plt.text(XAct*labmult, YAct*labmult2, r'$(\theta^{\text{R}}_{act},\theta^{\text{S}}_{act})$', fontsize=10)
+plt.legend(handles=[line1, line2], bbox_to_anchor=(0.97, 0.97), borderpad=0.8,
+           loc='upper right', fontsize=8)
+plt.annotate('', xytext=(arrowXLoc, YCough[10]*0.98), xy=(arrowXLoc, csReducYbd*1.02),
+             arrowprops=dict(arrowstyle='-|>',color='darkred')) # arrow for PLI intervention
+plt.annotate('', xytext=(XAct,YAct*1.05), xy=(XInt,YInt*0.96),
+             arrowprops=dict(arrowstyle='-|>',color='darkgreen')) # arrow for increased supplier inspection
+plt.text(XAct*labmult*1., YAct*labmult*0.88, r'$\theta_S:0.06\rightarrow0.08$', fontsize=8, color='darkgreen')
+plt.text(arrowXLoc*1.05, csReducYbd*labmult*0.92, r'$c_S:0.20\rightarrow0.15$', fontsize=8, color='darkred')
+plt.ylim(0, 0.18)
+plt.xlim(0, 1.0)
+plt.xlabel(r'$\theta^{\text{R}}$'+' (retailer inspection probability)', fontsize=11)
+plt.ylabel(r'$\theta^{\text{S}}$'+' (supplier inspection probability)', fontsize=11)
+plt.text(0.025, 0.168, r'$\times$'+' HH needs intervention', color='red',
+         bbox=dict(edgecolor='red', facecolor='whitesmoke', alpha=0.7))
+plt.text(0.85, csReducYbd*1.05, r'$\theta^{\text{S}}=$'+str(round(csReducYbd,3)),
+         color='dimgray',  fontsize=9)
+plt.text(0.85, YCough[0]*1.05, r'$\theta^{\text{S}}=$'+str(round(YCough[0],3)),
+         color='dimgray',  fontsize=9)
+plt.savefig('CS_cough.png', dpi=300, bbox_inches='tight')
+plt.show()
+
+# Paracetamol
+fig = plt.figure()
+fig.suptitle('Paracetamol', fontsize=supSize)
+line1, = plt.plot(XParac, YParac, linewidth=lnwd, color=bdColor, alpha=al, label='HH boundary, actual')
+plt.fill_between(XParac, YParac, 1.0, color=fillcolor, alpha = fillal)
+plt.plot(XAct, YAct, marker='o', color='black', markersize=9)
+plt.text(XAct*labmult, YAct*labmult2, r'$(\theta^{\text{R}}_{act},\theta^{\text{S}}_{act})$', fontsize=10)
+plt.legend(handles=[line1], bbox_to_anchor=(0.97, 0.97), borderpad=0.8,
+           loc='upper right', fontsize=8)
+plt.ylim(0, 0.1)
+plt.xlim(0, 0.6)
+plt.xlabel(r'$\theta^{\text{R}}$'+' (retailer inspection probability)', fontsize=11)
+plt.ylabel(r'$\theta^{\text{S}}$'+' (supplier inspection probability)', fontsize=11)
+plt.text(0.015, 0.0935, r'$\checkmark$'+' HH is feasible', color='darkgreen',
+         bbox=dict(edgecolor='darkgreen', facecolor='whitesmoke', alpha=0.7))
+plt.savefig('CS_parac.png', dpi=300, bbox_inches='tight')
+plt.show()
+
+#####################
+# Equilibrium plots
+#####################
+def RetPrefh12Overl12(X, scDict):
+    cRet, priceSup_2, priceSup_1 = scDict['cRet'], scDict['priceSup_2'], scDict['priceSup_1']
+    b, rateSup_2, rateSup_1 = scDict['b'], scDict['rateSup_2'], scDict['rateSup_1']
+    rateRetLo, rateRetHi, inspSensRet = scDict['rateRetLo'], scDict['rateRetHi'], scDict['inspSensRet']
+    numerator = cRet * (2 - cRet - priceSup_1 - priceSup_2)
+    denominator = 2 * (1 + b) * rateSup_1 * rateSup_2 * (rateRetHi - rateRetLo) * inspSensRet
+    thresh = numerator / denominator
+    if X >= thresh:
+        retval = 1
+    else:
+        retval = 0
+    return retval
+
+def RetPrefh1Overh12(X, scDict):
+    cRet, priceSup_2, priceSup_1 = scDict['cRet'], scDict['priceSup_2'], scDict['priceSup_1']
+    b, rateSup_2, rateSup_1 = scDict['b'], scDict['rateSup_2'], scDict['rateSup_1']
+    rateRetLo, rateRetHi, inspSensRet = scDict['rateRetLo'], scDict['rateRetHi'], scDict['inspSensRet']
+    numerator = (1 - b * (1 - cRet - priceSup_1) - cRet - priceSup_2)**2
+    denominator = 4 * (1 - b**2) * rateSup_1 * (1 - rateSup_2) * rateRetHi * inspSensRet
+    thresh = numerator / denominator
+    if X >= thresh:
+        retval = 1
+    else:
+        retval = 0
+    return retval
+
+def RetPrefh2Overh12(X, scDict):
+    cRet, priceSup_2, priceSup_1 = scDict['cRet'], scDict['priceSup_2'], scDict['priceSup_1']
+    b, rateSup_2, rateSup_1 = scDict['b'], scDict['rateSup_2'], scDict['rateSup_1']
+    rateRetLo, rateRetHi, inspSensRet = scDict['rateRetLo'], scDict['rateRetHi'], scDict['inspSensRet']
+    numerator = (1 - b * (1 - cRet - priceSup_2) - cRet - priceSup_1)**2
+    denominator = 4 * (1 - b**2) * rateSup_2 * (1 - rateSup_1) * rateRetHi * inspSensRet
+    thresh = numerator / denominator
+    if X >= thresh:
+        retval = 1
+    else:
+        retval = 0
+    return retval
+
+def RetPrefl1Overl12(X, scDict):
+    cRet, priceSup_2, priceSup_1 = scDict['cRet'], scDict['priceSup_2'], scDict['priceSup_1']
+    b, rateSup_2, rateSup_1 = scDict['b'], scDict['rateSup_2'], scDict['rateSup_1']
+    rateRetLo, rateRetHi, inspSensRet = scDict['rateRetLo'], scDict['rateRetHi'], scDict['inspSensRet']
+    numerator = (1 - b * (1 - priceSup_1) - priceSup_2)**2
+    denominator = 4 * (1 - b**2) * rateSup_1 * (1 - rateSup_2) * rateRetLo * inspSensRet
+    thresh = numerator / denominator
+    if X >= thresh:
+        retval = 1
+    else:
+        retval = 0
+    return retval
+
+def RetPrefl2Overl12(X, scDict):
+    cRet, priceSup_2, priceSup_1 = scDict['cRet'], scDict['priceSup_2'], scDict['priceSup_1']
+    b, rateSup_2, rateSup_1 = scDict['b'], scDict['rateSup_2'], scDict['rateSup_1']
+    rateRetLo, rateRetHi, inspSensRet = scDict['rateRetLo'], scDict['rateRetHi'], scDict['inspSensRet']
+    numerator = (1 - b * (1 - priceSup_2) - priceSup_1)**2
+    denominator = 4 * (1 - b**2) * rateSup_2 * (1 - rateSup_1) * rateRetLo * inspSensRet
+    thresh = numerator / denominator
+    if X >= thresh:
+        retval = 1
+    else:
+        retval = 0
+    return retval
+
+def RetPrefh1Overl1(X, scDict):
+    cRet, priceSup_2, priceSup_1 = scDict['cRet'], scDict['priceSup_2'], scDict['priceSup_1']
+    b, rateSup_2, rateSup_1 = scDict['b'], scDict['rateSup_2'], scDict['rateSup_1']
+    rateRetLo, rateRetHi, inspSensRet = scDict['rateRetLo'], scDict['rateRetHi'], scDict['inspSensRet']
+    numerator = cRet * (2 - cRet - 2 * priceSup_1)
+    denominator = 4 * rateSup_1 * (rateRetHi - rateRetLo) * inspSensRet
+    thresh = numerator / denominator
+    if X >= thresh:
+        retval = 1
+    else:
+        retval = 0
+    return retval
+
+def RetPrefh2Overl2(X, scDict):
+    cRet, priceSup_2, priceSup_1 = scDict['cRet'], scDict['priceSup_2'], scDict['priceSup_1']
+    b, rateSup_2, rateSup_1 = scDict['b'], scDict['rateSup_2'], scDict['rateSup_1']
+    rateRetLo, rateRetHi, inspSensRet = scDict['rateRetLo'], scDict['rateRetHi'], scDict['inspSensRet']
+    numerator = cRet * (2 - cRet - 2 * priceSup_2)
+    denominator = 4 * rateSup_2 * (rateRetHi - rateRetLo) * inspSensRet
+    thresh = numerator / denominator
+    if X >= thresh:
+        retval = 1
+    else:
+        retval = 0
+    return retval
+
+def RetPrefh1Overl12(X, scDict):
+    cRet, priceSup_2, priceSup_1 = scDict['cRet'], scDict['priceSup_2'], scDict['priceSup_1']
+    b, rateSup_2, rateSup_1 = scDict['b'], scDict['rateSup_2'], scDict['rateSup_1']
+    rateRetLo, rateRetHi, inspSensRet = scDict['rateRetLo'], scDict['rateRetHi'], scDict['inspSensRet']
+    numerator = (b ** 2 * (1 - cRet - priceSup_1) ** 2 - 2 * b * (1 - priceSup_1 - priceSup_2 +
+                priceSup_1 * priceSup_2) + cRet * (2 - cRet - 2 * priceSup_1) + (1 - priceSup_2) ** 2)
+    denominator = 4 * (1 - b ** 2) * rateSup_1 * inspSensRet * (rateRetHi - rateSup_2 * rateRetLo)
+    thresh = numerator / denominator
+    if X >= thresh:
+        retval = 1
+    else:
+        retval = 0
+    return retval
+
+def RetPrefh2Overl12(X, scDict):
+    cRet, priceSup_2, priceSup_1 = scDict['cRet'], scDict['priceSup_2'], scDict['priceSup_1']
+    b, rateSup_2, rateSup_1 = scDict['b'], scDict['rateSup_2'], scDict['rateSup_1']
+    rateRetLo, rateRetHi, inspSensRet = scDict['rateRetLo'], scDict['rateRetHi'], scDict['inspSensRet']
+    numerator = (b**2 * (1 - cRet - priceSup_2)**2 - 2 * b * (1 - priceSup_2 - priceSup_1 +
+                priceSup_2 * priceSup_1) + cRet * (2 - cRet - 2 * priceSup_2) + (1 - priceSup_1)**2)
+    denominator = 4 * (1 - b**2) * rateSup_2 * inspSensRet * (rateRetHi - rateSup_1 * rateRetLo)
+    thresh = numerator / denominator
+    if X >= thresh:
+        retval = 1
+    else:
+        retval = 0
+    return retval
+
+def RetPrefh12Overl1(X, scDict):
+    cRet, priceSup_2, priceSup_1 = scDict['cRet'], scDict['priceSup_2'], scDict['priceSup_1']
+    b, rateSup_2, rateSup_1 = scDict['b'], scDict['rateSup_2'], scDict['rateSup_1']
+    rateRetLo, rateRetHi, inspSensRet = scDict['rateRetLo'], scDict['rateRetHi'], scDict['inspSensRet']
+    numerator = (2 * b * (1 - cRet - priceSup_1) * (1 - cRet - priceSup_2) - 2 * cRet**2
+                + 2 * cRet * (2 - priceSup_1 - priceSup_2) - b**2 * (1 - priceSup_1)**2 - (1 - priceSup_2)**2)
+    denominator = 4 * (1 - b**2) * rateSup_1 * inspSensRet * (rateSup_2 * rateRetHi - rateRetLo)
+    thresh = numerator / denominator
+    if rateSup_2 * rateRetHi - rateRetLo >= 0 and X >= thresh:
+        retval = 1
+    elif rateSup_2 * rateRetHi - rateRetLo < 0 and X < thresh:
+        retval = 1
+    else:
+        retval = 0
+    return retval
+
+def RetPrefh12Overl2(X, scDict):
+    cRet, priceSup_2, priceSup_1 = scDict['cRet'], scDict['priceSup_2'], scDict['priceSup_1']
+    b, rateSup_2, rateSup_1 = scDict['b'], scDict['rateSup_2'], scDict['rateSup_1']
+    rateRetLo, rateRetHi, inspSensRet = scDict['rateRetLo'], scDict['rateRetHi'], scDict['inspSensRet']
+    numerator = (2 * b * (1 - cRet - priceSup_2) * (1 - cRet - priceSup_1) - 2 * cRet**2
+                + 2 * cRet * (2 - priceSup_2 - priceSup_1) - b**2 * (1 - priceSup_2)**2 - (1 - priceSup_1)**2)
+    denominator = 4 * (1 - b**2) * rateSup_2 * inspSensRet * (rateSup_1 * rateRetHi - rateRetLo)
+    thresh = numerator / denominator
+    if rateSup_1 * rateRetHi - rateRetLo >= 0 and X >= thresh:
+        retval = 1
+    elif rateSup_1 * rateRetHi - rateRetLo < 0 and X < thresh:
+        retval = 1
+    else:
+        retval = 0
+    return retval
+
+def RetPrefh2Overh1(X, scDict):
+    cRet, priceSup_2, priceSup_1 = scDict['cRet'], scDict['priceSup_2'], scDict['priceSup_1']
+    b, rateSup_2, rateSup_1 = scDict['b'], scDict['rateSup_2'], scDict['rateSup_1']
+    rateRetLo, rateRetHi, inspSensRet = scDict['rateRetLo'], scDict['rateRetHi'], scDict['inspSensRet']
+    numerator = (priceSup_2 - priceSup_1) * (2 - 2 * cRet - priceSup_1 - priceSup_2)
+    denominator = 4 * rateRetHi * (rateSup_2 - rateSup_1) * inspSensRet
+    thresh = numerator / denominator
+    if X >= thresh:
+        retval = 1
+    else:
+        retval = 0
+    return retval
+
+def RetPrefl2Overl1(X, scDict):
+    cRet, priceSup_2, priceSup_1 = scDict['cRet'], scDict['priceSup_2'], scDict['priceSup_1']
+    b, rateSup_2, rateSup_1 = scDict['b'], scDict['rateSup_2'], scDict['rateSup_1']
+    rateRetLo, rateRetHi, inspSensRet = scDict['rateRetLo'], scDict['rateRetHi'], scDict['inspSensRet']
+    numerator = (priceSup_2 - priceSup_1) * (2 - 2 * cRet - priceSup_1 - priceSup_2)
+    denominator = 4 * rateRetLo * (rateSup_2 - rateSup_1) * inspSensRet
+    thresh = numerator / denominator
+    if X >= thresh:
+        retval = 1
+    else:
+        retval = 0
+    return retval
+
+def RetPrefl2Overh1(X, scDict):
+    cRet, priceSup_2, priceSup_1 = scDict['cRet'], scDict['priceSup_2'], scDict['priceSup_1']
+    b, rateSup_2, rateSup_1 = scDict['b'], scDict['rateSup_2'], scDict['rateSup_1']
+    rateRetLo, rateRetHi, inspSensRet = scDict['rateRetLo'], scDict['rateRetHi'], scDict['inspSensRet']
+    numerator = (cRet + priceSup_1 - priceSup_2) * (2 - cRet - priceSup_1 - priceSup_2)
+    denominator = 4 * inspSensRet * (rateSup_1 * rateRetHi - rateSup_2 * rateRetLo)
+    thresh = numerator / denominator
+    crucRat = (cRet + priceSup_1 - priceSup_2) / (rateSup_1 * rateRetHi - rateSup_2 * rateRetLo)
+    if X >= thresh and crucRat > 0:
+        retval = 1
+    elif X < thresh and crucRat <= 0:
+        retval = 1
+    else:
+        retval = 0
+
+    return retval
+
+def RetPrefl1Overh2(X, scDict):
+    cRet, priceSup_2, priceSup_1 = scDict['cRet'], scDict['priceSup_2'], scDict['priceSup_1']
+    b, rateSup_2, rateSup_1 = scDict['b'], scDict['rateSup_2'], scDict['rateSup_1']
+    rateRetLo, rateRetHi, inspSensRet = scDict['rateRetLo'], scDict['rateRetHi'], scDict['inspSensRet']
+    numerator = (cRet + priceSup_2 - priceSup_1) * (2 - cRet - priceSup_2 - priceSup_1)
+    denominator = 4 * inspSensRet * (rateSup_2 * rateRetHi - rateSup_1 * rateRetLo)
+    thresh = numerator / denominator
+    crucRat = (cRet + priceSup_2 - priceSup_1) / (rateSup_2 * rateRetHi - rateSup_1 * rateRetLo)
+    if X >= thresh and crucRat > 0:
+        retval = 1
+    elif X < thresh and crucRat <= 0:
+        retval = 1
+    else:
+        retval = 0
+    return retval
+
+b, cRet, rateSup_1, rateSup_2, rateRetLo, rateRetHi = 0.8, 0.04, 0.92, 0.92, 0.6, 0.9
+inspSensRet, priceSup_1, priceSup_2 = 0.75, 0.25, 0.25
+X = 0.08
+scDict = {'b': b, 'cRet': cRet, 'rateRetLo': rateRetLo, 'rateRetHi': rateRetHi, 'inspSensRet': inspSensRet,
+          'rateSup_1': rateSup_1, 'rateSup_2': rateSup_2, 'priceSup_1': priceSup_1, 'priceSup_2': priceSup_2}
+# Shows the retailer's preferred strategy for various wholesale prices and quality rates of symmetric suppliers
+numpts = 1200  # Resolution of prices and rates
+
+plotMat = np.empty((numpts, numpts, 5))  # h12, l12, h1, l1, N; h2/l2 ignored for symmetric case
+plotMat[:] = 0
+for wInd, wCurr in enumerate(np.arange(0.01,0.99,(0.99-0.01)/numpts)):
+    scDict['priceSup_1'], scDict['priceSup_2'] = wCurr, wCurr
+    for supRateInd, supRateCurr in enumerate(np.arange(0.01, 0.99, (0.99 - 0.01) / numpts)):
+        scDict['rateSup_1'], scDict['rateSup_2'] = supRateCurr, supRateCurr
+        # Identify dominant retailer strategy
+        prefh12l12 = RetPrefh12Overl12(X, scDict)
+        prefh1h12 = RetPrefh1Overh12(X, scDict)
+        prefl1l12 = RetPrefl1Overl12(X, scDict)
+        prefh1l1 = RetPrefh1Overl1(X, scDict)
+        prefh1l12 = RetPrefh1Overl12(X, scDict)
+        prefh12l1 = RetPrefh12Overl1(X, scDict)
+        # h12
+        if prefh12l12 == 1 and prefh1h12 == 0 and prefh12l1 == 1:
+            q1, q2 = RetOptQuants(0, scDict['b'], scDict['cRet'], scDict['priceSup_1'], scDict['priceSup_2'])
+            if RetUtil(X, scDict, 1, supRateCurr, supRateCurr, q1, q2) < 0:  # N strategy dominates
+                plotMat[wInd, supRateInd, 4] = 1
+            else:
+                plotMat[wInd, supRateInd, 0] = 1
+        # l12
+        if prefh12l12 == 0 and prefl1l12 == 0 and prefh1l12 == 0:
+            q1, q2 = RetOptQuants(1, scDict['b'], scDict['cRet'], scDict['priceSup_1'], scDict['priceSup_2'])
+            if RetUtil(X, scDict, 0, supRateCurr, supRateCurr, q1, q2) < 0:  # N strategy dominates
+                plotMat[wInd, supRateInd, 4] = 1
+            else:
+                plotMat[wInd, supRateInd, 1] = 1
+        # h1
+        if prefh1h12 == 1 and prefh1l1 == 1 and prefh1l12 == 1:
+            q1, q2 = RetOptQuants(2, scDict['b'], scDict['cRet'], scDict['priceSup_1'], scDict['priceSup_2'])
+            if RetUtil(X, scDict, 1, supRateCurr, supRateCurr, q1, q2) < 0:  # N strategy dominates
+                plotMat[wInd, supRateInd, 4] = 1
+            else:
+                plotMat[wInd, supRateInd, 2] = 1
+        # l12
+        if prefl1l12 == 1 and prefh1l1 == 0 and prefh12l1 == 0:
+            q1, q2 = RetOptQuants(3, scDict['b'], scDict['cRet'], scDict['priceSup_1'], scDict['priceSup_2'])
+            if RetUtil(X, scDict, 0, supRateCurr, supRateCurr, q1, q2) < 0:  # N strategy dominates
+                plotMat[wInd, supRateInd, 4] = 1
+            else:
+                plotMat[wInd, supRateInd, 3] = 1
+
+# Fill in weird high w points w N
+plotMat[round(0.9*numpts):, :, 2] = 0.0
+plotMat[round(0.9*numpts):, :, 4] = 1.0
+# Fill in blanks
+for i in range(numpts):
+    for j in range(numpts):
+        if np.sum(plotMat[i, j, :]) != 1.0:
+            print('point ' + str(i) + ' '+ str(j))
+            plotMat[i, j, 2] = 1.0
+
+alval=0.5
+fig = plt.figure()
+# ax.set_title(rf"Equilibrium regions ($b=0.8,\ c_S={cS}$)", fontsize=12, pad=16)
+# fig.suptitle(r'$b=$'+str(b)+', '+r'$L=$'+str(supRateLo),fontsize=18, fontweight='bold')
+ax = fig.add_subplot(111)
+
+eqcolors = ['royalblue', 'firebrick', 'cornflowerblue', 'indianred', 'dimgray']
+labels = ['h12', 'l12', 'h1', 'l1', 'N']
+
+imlist = []
+for eqind in reversed(range(len(labels))):
+    mycmap = matplotlib.colors.ListedColormap(['none', eqcolors[eqind]], name='from_list', N=None)
+    # if eqcolors[eqind] == 'black':  # No alpha transparency
+    #     im = ax.imshow(eqStrat_matList[eqind], vmin=0, vmax=1, aspect='auto',
+    #                         extent=(0, CthetaMax, 0, cSupMax),
+    #                         origin="lower", cmap=mycmap, alpha=1)
+    # else:
+    im = ax.imshow(plotMat[:,:,eqind].T, vmin=0, vmax=1, aspect='auto',
+                            extent=(0, 1, 0, 1),
+                            origin="lower", cmap=mycmap, alpha=alval)
+    imlist.append(im)
+plt.ylim(0, 1.0)
+plt.xlim(0, 1.0)
+plt.text(0.85, 0.5, 'N', color='dimgray', fontsize=18)
+plt.text(0.37, 0.92, 'h12', color='dimgray', fontsize=18)
+plt.text(0.1, 0.3, 'l12', color='dimgray', fontsize=18)
+plt.text(0.52, 0.72, 'h1', color='dimgray', fontsize=18)
+plt.text(0.48, 0.39, 'l1', color='dimgray', fontsize=18)
+plt.xlabel(r'$w_1=w_2$', fontsize=11)
+plt.ylabel(r'$\Lambda_1=\Lambda_2$', fontsize=11, rotation=0, labelpad=14)
+# plt.savefig('retailerStratPrefs.png', dpi=300, bbox_inches='tight')
+plt.show()
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
