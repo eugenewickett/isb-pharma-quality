@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 
 np.set_printoptions(precision=3, suppress=True)
 plt.rcParams["font.family"] = "serif"
+plt.rcParams['mathtext.fontset'] = 'stix'
 
 def sqroot(val):
     # Returns square root of val after checking that val is positive; returns NaN otherwise
@@ -1225,7 +1226,7 @@ plt.plot(Xvec, LHsqzprices[:, 1], '--', linewidth=lnwd, color=LHcols[1], alpha=a
 plt.plot(Xvec, HHprices[:, 0], linewidth=lnwd, color=HHcol, alpha=al)
 plt.ylim(0, 0.4)
 plt.xlim(0, Xmax)
-plt.xlabel(r'$X$', fontsize=11)
+plt.xlabel(r'$\Gamma^{\text{R}}$', fontsize=11)
 plt.ylabel(r'$w$', fontsize=11, rotation=0, labelpad=14)
 plt.text(0.09, LLprices[0, 0]+textgap, r'$LL$ (FOC)', color=LLcol, fontsize=14)
 plt.text(0.4-textgap, LLsqzprices[660, 0], r'$LL$ (sqz)', color=LLsqzcol, fontsize=14)
@@ -1277,7 +1278,7 @@ plt.plot(Yvec, HHhldprices[:, 1], linewidth=lnwd, color=HHhldcol, alpha=al)
 plt.plot(Yvec, HHprices[:, 0], linewidth=lnwd, color=HHcol, alpha=al)
 plt.ylim(0, 0.4)
 plt.xlim(0, Ymax)
-plt.xlabel(r'$Y$', fontsize=11)
+plt.xlabel(r'$\Gamma^{\text{S}}$', fontsize=11)
 plt.ylabel(r'$w$', fontsize=11, rotation=0, labelpad=14)
 plt.text(0.002, 0.18, r'$LL$ (FOC)', color=LLcol, fontsize=14)
 plt.text(0.035, 0.295, r'$LH$ (hld)', color=LHcols[2], fontsize=14)
@@ -1378,8 +1379,8 @@ ax.set_xbound(0, Xmax/Kpen)
 ax.set_ybound(0, Ymax/Kpen)
 # plt.xlabel(r'$\theta^{\text{R}}$', fontsize=11)
 # plt.ylabel(r'$\theta^{\text{S}}$', fontsize=11, rotation=0, labelpad=14)
-plt.xlabel(r'$X$', fontsize=11)
-plt.ylabel(r'$Y$', fontsize=11, rotation=0, labelpad=14)
+plt.xlabel(r'$\Gamma^{\text{R}}$', fontsize=11)
+plt.ylabel(r'$\Gamma^{\text{S}}$', fontsize=11, rotation=0, labelpad=14)
 plt.savefig('eqplot_example.png', dpi=300, bbox_inches='tight')
 plt.show()
 
@@ -1471,7 +1472,7 @@ plt.savefig('CS_parac.png', dpi=300, bbox_inches='tight')
 plt.show()
 
 #####################
-# Equilibrium plots
+# Retailer extension plots
 #####################
 def RetPrefh12Overl12(X, scDict):
     cRet, priceSup_2, priceSup_1 = scDict['cRet'], scDict['priceSup_2'], scDict['priceSup_1']
@@ -1743,13 +1744,112 @@ for i in range(numpts):
             print('point ' + str(i) + ' '+ str(j))
             plotMat[i, j, 2] = 1.0
 
-alval=0.5
+# Get line segments for boundaries
+# First get intersection points
+def BDh12l12(w, X, scDict):
+    rhoR, b, cR, h, l = scDict['inspSensRet'], scDict['b'], scDict['cRet'], scDict['rateRetHi'], scDict['rateRetLo']
+    numer = sqroot( cR*(2 - cR - 2 * w))
+    denom = sqroot( 2*(1 + b) * (h - l) * X * rhoR)
+    return numer / denom
+
+def BDh12h1(w, X, scDict):
+    rhoR, b, cR, h, l = scDict['inspSensRet'], scDict['b'], scDict['cRet'], scDict['rateRetHi'], scDict['rateRetLo']
+    inner = h * X * rhoR * ((b ** 2 - 1) * (cR + w - 1) ** 2 + (1 + b) ** 2 * h * X * rhoR)
+    return 0.5 * (1 + sqroot(inner) / ((1 + b) * h * X * rhoR))
+
+def wStartBDh1l12(X, scDict):
+    rhoR, b, cR, h, l = scDict['inspSensRet'], scDict['b'], scDict['cRet'], scDict['rateRetHi'], scDict['rateRetLo']
+    numer = (-(1 + b * (cR - 1) + cR) * l
+            + sqroot((1 + b) * l * (2 * cR ** 2 * l - (b - 1) * h ** 2 * X * rhoR)))
+    denom = (b - 1) * l
+    return numer / denom
+
+def BDh1l12A(w, X, scDict):
+    rhoR, b, cR, h, l = scDict['inspSensRet'], scDict['b'], scDict['cRet'], scDict['rateRetHi'], scDict['rateRetLo']
+    inner = (1 + b) * X * rhoR * (l * (cR ** 2 + 2 * cR * (w - 1) - (w - 1) ** 2 + b * (cR + w - 1) ** 2)
+            + (1 + b) * h ** 2 * X * rhoR)
+    numer = (1 + b) * h * X * rhoR + sqroot(inner)
+    denom = 2 * (1 + b) * l * X * rhoR
+    return numer / denom
+
+def BDh1l12B(w, X, scDict):
+    rhoR, b, cR, h, l = scDict['inspSensRet'], scDict['b'], scDict['cRet'], scDict['rateRetHi'], scDict['rateRetLo']
+    inner = (1 + b) * X * rhoR * (l * (cR ** 2 + 2 * cR * (w - 1) - (w - 1) ** 2 + b * (cR + w - 1) ** 2)
+            + (1 + b) * h ** 2 * X * rhoR)
+    numer = (1 + b) * h * X * rhoR - sqroot(inner)
+    denom = 2 * (1 + b) * l * X * rhoR
+    return numer / denom
+
+def BDh1l1(w, X, scDict):
+    rhoR, b, cR, h, l = scDict['inspSensRet'], scDict['b'], scDict['cRet'], scDict['rateRetHi'], scDict['rateRetLo']
+    return cR * (2 - cR - 2 * w) / (4 * (h - l) * X * rhoR)
+
+def wStartBDl1l12A(X, scDict):
+    rhoR, b, cR, h, l = scDict['inspSensRet'], scDict['b'], scDict['cRet'], scDict['rateRetHi'], scDict['rateRetLo']
+    return 1 - ((1 + b) * l * X * rhoR / (1 - b)) ** 0.5
+
+def BDl1l12A(w, X, scDict):
+    rhoR, b, cR, h, l = scDict['inspSensRet'], scDict['b'], scDict['cRet'], scDict['rateRetHi'], scDict['rateRetLo']
+    inner = l * X * rhoR * ((b ** 2 - 1) * (w - 1) ** 2 + (1 + b) ** 2 * l * X * rhoR)
+    return 0.5 * (1 + sqroot(inner) / ((1 + b) * l * X * rhoR))
+
+def BDl1l12B(w, X, scDict):
+    rhoR, b, cR, h, l = scDict['inspSensRet'], scDict['b'], scDict['cRet'], scDict['rateRetHi'], scDict['rateRetLo']
+    inner = l * X * rhoR * ((b ** 2 - 1) * (w - 1) ** 2 + (1 + b) ** 2 * l * X * rhoR)
+    return 0.5 * (1 - sqroot(inner) / ((1 + b) * l * X * rhoR))
+
+# First plot: X = 0.08
+# List approximate intersection points here
+wInt1, wInt2, wInt3, wInt4 = 0.424, 0.443, 0.58, 0.54
+wBDh1l12, wBDl1l12 = wStartBDh1l12(X, scDict), wStartBDl1l12A(X, scDict)
+
+# Get boundary lines
+wVec = np.arange(0.01, 0.99, (0.99-0.01)/numpts)
+wAVec, wYVec, wBVec, bdAVec, bdYVec, bdBVec = [], [], [], [], [], []
+bdAadj, bdAadj2, bdBadj = 0.022, 0.019,0.0025
+bdYadj = 0.010
+for wCurr in wVec:
+    if wCurr <= wInt1:
+        wAVec.append(wCurr)
+        bdAVec.append(BDh12l12(wCurr, X, scDict)+bdAadj)
+        wYVec.append(wCurr)
+        bdYVec.append(BDh12l12(wCurr, X, scDict)+bdYadj)
+    elif wCurr > wInt1+0.002:
+        wAVec.append(wCurr)
+        bdAVec.append(BDh12h1(wCurr, X, scDict)+bdAadj2)
+    if wCurr <= wInt1-0.009:
+        wBVec.append(wCurr)
+        bdBVec.append(BDh12l12(wCurr, X, scDict) - bdBadj)
+    if wCurr >= wBDh1l12 and wCurr <= wInt1: # Upper portion of h1-l12 boundary
+        wYVec.append(wCurr+0.005)
+        bdYVec.append(BDh1l12A(wCurr, X, scDict)+bdYadj)
+    if wCurr >= wBDh1l12 and wCurr <= wInt2: # Lower portion of h1-l12 boundary
+        wYVec.append(wCurr)
+        bdYVec.append(BDh1l12B(wCurr, X, scDict)+bdYadj)
+        wBVec.append(wCurr-0.008)
+        bdBVec.append(BDh1l12B(wCurr, X, scDict))
+    if wCurr > wInt2 and wCurr < wInt3:  # h1-l1 boundary
+        wYVec.append(wCurr)
+        bdYVec.append(BDh1l1(wCurr, X, scDict))
+for wCurr in reversed(wVec):
+    if wCurr >= wBDh1l12 and wCurr <= wInt1-0.006: # Upper portion of h1-l12 boundary
+        wBVec.append(wCurr - 0.02)
+        bdBVec.append(BDh1l12A(wCurr, X, scDict))
+    if wCurr >= wBDl1l12 and wCurr < wInt2-0.003: # Upper portion of l1-l12 boundary
+        wBVec.append(wCurr)
+        bdBVec.append(BDl1l12A(wCurr, X, scDict))
+for wCurr in wVec:
+    if wCurr >= wBDl1l12 and wCurr <= wInt4: # Lower portion of l1-l12 boundary
+        wBVec.append(wCurr)
+        bdBVec.append(BDl1l12B(wCurr, X, scDict))
+
+alval, reglabsize, bdlabsize, bdWidth = 0.5, 18, 22, 2.5
 fig = plt.figure()
 # ax.set_title(rf"Equilibrium regions ($b=0.8,\ c_S={cS}$)", fontsize=12, pad=16)
 # fig.suptitle(r'$b=$'+str(b)+', '+r'$L=$'+str(supRateLo),fontsize=18, fontweight='bold')
 ax = fig.add_subplot(111)
 
-eqcolors = ['royalblue', 'firebrick', 'cornflowerblue', 'indianred', 'dimgray']
+eqcolors = ['royalblue', 'indianred', 'cornflowerblue', 'lightcoral', 'dimgray']
 labels = ['h12', 'l12', 'h1', 'l1', 'N']
 
 imlist = []
@@ -1764,21 +1864,164 @@ for eqind in reversed(range(len(labels))):
                             extent=(0, 1, 0, 1),
                             origin="lower", cmap=mycmap, alpha=alval)
     imlist.append(im)
+# Plot boundaries
+plt.plot(wAVec, bdAVec, dashes=[0.7, 0.7], color='indigo', alpha=0.8, linewidth=bdWidth)
+plt.plot(wYVec, bdYVec, '-.', color='darkgreen', alpha=0.8, linewidth=bdWidth)
+plt.plot(wBVec, bdBVec, '--', color='saddlebrown', alpha=0.8, linewidth=bdWidth)
 plt.ylim(0, 1.0)
 plt.xlim(0, 1.0)
-plt.text(0.85, 0.5, 'N', color='dimgray', fontsize=18)
-plt.text(0.37, 0.92, 'h12', color='dimgray', fontsize=18)
-plt.text(0.1, 0.3, 'l12', color='dimgray', fontsize=18)
-plt.text(0.52, 0.72, 'h1', color='dimgray', fontsize=18)
-plt.text(0.48, 0.39, 'l1', color='dimgray', fontsize=18)
-plt.xlabel(r'$w_1=w_2$', fontsize=11)
-plt.ylabel(r'$\Lambda_1=\Lambda_2$', fontsize=11, rotation=0, labelpad=14)
-# plt.savefig('retailerStratPrefs.png', dpi=300, bbox_inches='tight')
+plt.text(0.85, 0.5, 'N', color='dimgray', fontsize=reglabsize)
+plt.text(0.37, 0.92, 'h12', color='dimgray', fontsize=reglabsize)
+plt.text(0.1, 0.3, 'l12', color='dimgray', fontsize=reglabsize)
+plt.text(0.57, 0.71, 'h1', color='dimgray', fontsize=reglabsize)
+plt.text(0.48, 0.39, 'l1', color='dimgray', fontsize=reglabsize)
+plt.text(0.57, 0.85, r'$\mathbf{\Lambda}^\text{A}$', color='indigo', fontsize=bdlabsize, alpha=0.9)
+plt.text(0.46, 0.61, r'$\mathbf{\Lambda}^\text{Y}$', color='darkgreen', fontsize=bdlabsize, alpha=0.9)
+plt.text(0.35, 0.35, r'$\mathbf{\Lambda}^\text{B}$', color='saddlebrown', fontsize=bdlabsize, alpha=0.9)
+plt.xlabel(r'$w_1=w_2$', fontsize=14)
+plt.ylabel(r'$\Lambda_1=\Lambda_2$', fontsize=14, rotation=0, labelpad=10)
+ax.yaxis.set_label_coords(-0.09, 0.47)
+plt.savefig('retailerStratPrefs1.png', dpi=300, bbox_inches='tight')
 plt.show()
 
+###
+# Second plot: X = 0.16
+###
+b, cRet, rateSup_1, rateSup_2, rateRetLo, rateRetHi = 0.8, 0.04, 0.92, 0.92, 0.6, 0.9
+inspSensRet, priceSup_1, priceSup_2 = 0.75, 0.25, 0.25
+X = 0.16
+scDict = {'b': b, 'cRet': cRet, 'rateRetLo': rateRetLo, 'rateRetHi': rateRetHi, 'inspSensRet': inspSensRet,
+          'rateSup_1': rateSup_1, 'rateSup_2': rateSup_2, 'priceSup_1': priceSup_1, 'priceSup_2': priceSup_2}
+# Shows the retailer's preferred strategy for various wholesale prices and quality rates of symmetric suppliers
+numpts = 1200  # Resolution of prices and rates
 
+plotMat = np.empty((numpts, numpts, 5))  # h12, l12, h1, l1, N; h2/l2 ignored for symmetric case
+plotMat[:] = 0
+for wInd, wCurr in enumerate(np.arange(0.01,0.99,(0.99-0.01)/numpts)):
+    scDict['priceSup_1'], scDict['priceSup_2'] = wCurr, wCurr
+    for supRateInd, supRateCurr in enumerate(np.arange(0.01, 0.99, (0.99 - 0.01) / numpts)):
+        scDict['rateSup_1'], scDict['rateSup_2'] = supRateCurr, supRateCurr
+        # Identify dominant retailer strategy
+        prefh12l12 = RetPrefh12Overl12(X, scDict)
+        prefh1h12 = RetPrefh1Overh12(X, scDict)
+        prefl1l12 = RetPrefl1Overl12(X, scDict)
+        prefh1l1 = RetPrefh1Overl1(X, scDict)
+        prefh1l12 = RetPrefh1Overl12(X, scDict)
+        prefh12l1 = RetPrefh12Overl1(X, scDict)
+        # h12
+        if prefh12l12 == 1 and prefh1h12 == 0 and prefh12l1 == 1:
+            q1, q2 = RetOptQuants(0, scDict['b'], scDict['cRet'], scDict['priceSup_1'], scDict['priceSup_2'])
+            if RetUtil(X, scDict, 1, supRateCurr, supRateCurr, q1, q2) < 0:  # N strategy dominates
+                plotMat[wInd, supRateInd, 4] = 1
+            else:
+                plotMat[wInd, supRateInd, 0] = 1
+        # l12
+        if prefh12l12 == 0 and prefl1l12 == 0 and prefh1l12 == 0:
+            q1, q2 = RetOptQuants(1, scDict['b'], scDict['cRet'], scDict['priceSup_1'], scDict['priceSup_2'])
+            if RetUtil(X, scDict, 0, supRateCurr, supRateCurr, q1, q2) < 0:  # N strategy dominates
+                plotMat[wInd, supRateInd, 4] = 1
+            else:
+                plotMat[wInd, supRateInd, 1] = 1
+        # h1
+        if prefh1h12 == 1 and prefh1l1 == 1 and prefh1l12 == 1:
+            q1, q2 = RetOptQuants(2, scDict['b'], scDict['cRet'], scDict['priceSup_1'], scDict['priceSup_2'])
+            if RetUtil(X, scDict, 1, supRateCurr, supRateCurr, q1, q2) < 0:  # N strategy dominates
+                plotMat[wInd, supRateInd, 4] = 1
+            else:
+                plotMat[wInd, supRateInd, 2] = 1
+        # l12
+        if prefl1l12 == 1 and prefh1l1 == 0 and prefh12l1 == 0:
+            q1, q2 = RetOptQuants(3, scDict['b'], scDict['cRet'], scDict['priceSup_1'], scDict['priceSup_2'])
+            if RetUtil(X, scDict, 0, supRateCurr, supRateCurr, q1, q2) < 0:  # N strategy dominates
+                plotMat[wInd, supRateInd, 4] = 1
+            else:
+                plotMat[wInd, supRateInd, 3] = 1
 
+# Fill in weird high w points w N
+plotMat[round(0.9*numpts):, :, 2] = 0.0
+plotMat[round(0.9*numpts):, :, 4] = 1.0
+# Fill in blanks
+for i in range(numpts):
+    for j in range(numpts):
+        if np.sum(plotMat[i, j, :]) != 1.0:
+            print('point ' + str(i) + ' '+ str(j))
+            plotMat[i, j, 2] = 1.0
 
+# List approximate intersection points here
+wInt1, wInt2, wInt3, wInt4 = 0.07, 0.21, 0.38, 0.35
+wBDh1l12, wBDl1l12 = wStartBDh1l12(X, scDict), wStartBDl1l12A(X, scDict)
+
+# Get boundary lines
+wVec = np.arange(0.01, 0.99, (0.99-0.01)/numpts)
+wAVec, wYVec, wBVec, bdAVec, bdYVec, bdBVec = [], [], [], [], [], []
+bdAadj, bdAadj2, bdBadj = 0.022, 0.019,0.0025
+bdYadj = 0.010
+for wCurr in wVec:
+    if wCurr <= wInt1:
+        wAVec.append(wCurr)
+        bdAVec.append(BDh12l12(wCurr, X, scDict)+bdAadj)
+        wYVec.append(wCurr)
+        bdYVec.append(BDh12l12(wCurr, X, scDict)+bdYadj)
+    elif wCurr > wInt1+0.02:
+        wAVec.append(wCurr)
+        bdAVec.append(BDh12h1(wCurr, X, scDict)+bdAadj2)
+    if wCurr <= wInt1-0.009:
+        wBVec.append(wCurr)
+        bdBVec.append(BDh12l12(wCurr, X, scDict) - bdBadj)
+    if wCurr >= wBDh1l12 and wCurr <= wInt1: # Upper portion of h1-l12 boundary
+        wYVec.append(wCurr+0.005)
+        bdYVec.append(BDh1l12A(wCurr, X, scDict)+bdYadj)
+    if wCurr >= wBDh1l12 and wCurr <= wInt2: # Lower portion of h1-l12 boundary
+        wYVec.append(wCurr)
+        bdYVec.append(BDh1l12B(wCurr, X, scDict)+bdYadj)
+        wBVec.append(wCurr-0.008)
+        bdBVec.append(BDh1l12B(wCurr, X, scDict))
+    if wCurr > wInt2 and wCurr < wInt3:  # h1-l1 boundary
+        wYVec.append(wCurr)
+        bdYVec.append(BDh1l1(wCurr, X, scDict))
+for wCurr in wVec:
+    if wCurr >= wBDl1l12+0.01 and wCurr <= wInt4: # Lower portion of l1-l12 boundary
+        wBVec.append(wCurr)
+        bdBVec.append(BDl1l12B(wCurr, X, scDict))
+
+alval, reglabsize, bdlabsize, bdWidth = 0.5, 18, 22, 2.5
+
+fig = plt.figure()
+ax = fig.add_subplot(111)
+eqcolors = ['royalblue', 'indianred', 'cornflowerblue', 'lightcoral', 'dimgray']
+labels = ['h12', 'l12', 'h1', 'l1', 'N']
+
+imlist = []
+for eqind in reversed(range(len(labels))):
+    mycmap = matplotlib.colors.ListedColormap(['none', eqcolors[eqind]], name='from_list', N=None)
+    # if eqcolors[eqind] == 'black':  # No alpha transparency
+    #     im = ax.imshow(eqStrat_matList[eqind], vmin=0, vmax=1, aspect='auto',
+    #                         extent=(0, CthetaMax, 0, cSupMax),
+    #                         origin="lower", cmap=mycmap, alpha=1)
+    # else:
+    im = ax.imshow(plotMat[:,:,eqind].T, vmin=0, vmax=1, aspect='auto',
+                            extent=(0, 1, 0, 1),
+                            origin="lower", cmap=mycmap, alpha=alval)
+    imlist.append(im)
+# Plot boundaries
+plt.plot(wAVec, bdAVec, dashes=[0.7, 0.7], color='indigo', alpha=0.8, linewidth=bdWidth)
+plt.plot(wYVec, bdYVec, '-.', color='darkgreen', alpha=0.8, linewidth=bdWidth)
+plt.plot(wBVec, bdBVec, '--', color='saddlebrown', alpha=0.8, linewidth=bdWidth)
+plt.ylim(0, 1.0)
+plt.xlim(0, 1.0)
+plt.text(0.85, 0.5, 'N', color='dimgray', fontsize=reglabsize)
+plt.text(0.03, 0.89, 'h12', color='dimgray', fontsize=reglabsize)
+plt.text(0.05, 0.17, 'l12', color='dimgray', fontsize=reglabsize)
+plt.text(0.35, 0.59, 'h1', color='dimgray', fontsize=reglabsize)
+plt.text(0.29, 0.28, 'l1', color='dimgray', fontsize=reglabsize)
+plt.text(0.35, 0.835, r'$\mathbf{\Lambda}^\text{A}$', color='indigo', fontsize=bdlabsize, alpha=0.9)
+plt.text(0.225, 0.435, r'$\mathbf{\Lambda}^\text{Y}$', color='darkgreen', fontsize=bdlabsize, alpha=0.9)
+plt.text(0.22, 0.18, r'$\mathbf{\Lambda}^\text{B}$', color='saddlebrown', fontsize=bdlabsize, alpha=0.9)
+plt.xlabel(r'$w_1=w_2$', fontsize=14)
+plt.ylabel(r'$\Lambda_1=\Lambda_2$', fontsize=14, rotation=0, labelpad=10)
+ax.yaxis.set_label_coords(-0.09, 0.47)
+plt.savefig('retailerStratPrefs2.png', dpi=300, bbox_inches='tight')
+plt.show()
 
 
 
