@@ -2023,6 +2023,226 @@ ax.yaxis.set_label_coords(-0.09, 0.47)
 plt.savefig('retailerStratPrefs2.png', dpi=300, bbox_inches='tight')
 plt.show()
 
+###
+# Third plot: Asymmetric suppliers
+###
+# Need to define new boundary functions for the asymmetric case
+def asymBDh1h2(w2, X, scDict):
+    rhoR, b, cR, h, l = scDict['inspSensRet'], scDict['b'], scDict['cRet'], scDict['rateRetHi'], scDict['rateRetLo']
+    Lamb1, Lamb2 = scDict['rateSup_1'], scDict['rateSup_2']
+    radterm = sqroot((((-1 + cR + w2)**2) + 4*h*X*(Lamb2-Lamb1)*rhoR) / ((h**2)*((Lamb1 - Lamb2)**2)*(rhoR**2)))
+    retw1 = 1 - cR + h*(Lamb1 - Lamb2)*rhoR*radterm
+    return retw1
+
+def w1Whereh1Invalid(X, scDict):  # What is highest w1 for h1 to be valid?
+    rhoR, b, cR, h, l = scDict['inspSensRet'], scDict['b'], scDict['cRet'], scDict['rateRetHi'], scDict['rateRetLo']
+    Lamb1, Lamb2 = scDict['rateSup_1'], scDict['rateSup_2']
+    found = False
+    wVec = np.arange(0.001, 0.999, (0.999-0.001)/1000)
+    wInd, retw1 = 0, wVec[0]
+    scDictTemp = scDict.copy()
+    while not found:
+        w1Curr = wVec[wInd]
+        q1h1, q2h1 = RetOptQuants(2, scDictTemp['b'], scDictTemp['cRet'], w1Curr, 0.9)
+        scDictTemp['priceSup_1'], scDictTemp['priceSup_2']  = w1Curr, 0.9
+        h1Util = RetUtil(X, scDictTemp, 1, scDictTemp['rateSup_1'], scDictTemp['rateSup_2'], q1h1, q2h1)
+        if h1Util < 0:
+            retw1 = wVec[wInd]
+            found = True
+        wInd += 1
+    return retw1
+
+def asymBDh1l1(w2, X, scDict):
+    rhoR, b, cR, h, l = scDict['inspSensRet'], scDict['b'], scDict['cRet'], scDict['rateRetHi'], scDict['rateRetLo']
+    Lamb1, Lamb2 = scDict['rateSup_1'], scDict['rateSup_2']
+    retw1 = (((2 - cR)*cR)/(2*(cR + 2*(h - l)* X *rhoR)))
+    return retw1
+
+def asymBDh2h12(w2, X, scDict):
+    rhoR, b, cR, h, l = scDict['inspSensRet'], scDict['b'], scDict['cRet'], scDict['rateRetHi'], scDict['rateRetLo']
+    Lamb1, Lamb2 = scDict['rateSup_1'], scDict['rateSup_2']
+    radterm = sqroot(X/((-1 + (b**2))* h* (-1 + Lamb1)*Lamb2*rhoR))
+    retw1 = 1 - cR + b*(-1 + cR + w2) + (1 - (b**2))* 2 * h * (-1 + Lamb1)*Lamb2* rhoR *radterm
+    return retw1
+
+def asymBDh1h12(w2, X, scDict):
+    rhoR, b, cR, h, l = scDict['inspSensRet'], scDict['b'], scDict['cRet'], scDict['rateRetHi'], scDict['rateRetLo']
+    Lamb1, Lamb2 = scDict['rateSup_1'], scDict['rateSup_2']
+    radterm = sqroot(((b**2)* X)/((-1 + (b**2)) *h * Lamb1 *(-1 + Lamb2)*rhoR))
+    retw1 = 1-cR+(-1+cR+w2)/b -2*h *Lamb1* (-1 + Lamb2)*rhoR* radterm + (2*h*Lamb1* (-1 + Lamb2)*rhoR *radterm)/(b**2)
+    return retw1
+
+def asymBDh12l1(w2, X, scDict):
+    rhoR, b, cR, h, l = scDict['inspSensRet'], scDict['b'], scDict['cRet'], scDict['rateRetHi'], scDict['rateRetLo']
+    Lamb1, Lamb2 = scDict['rateSup_1'], scDict['rateSup_2']
+    radterm = sqroot(-1*(((cR**2) - 2 *b* cR* (-1 + cR + w2) + 4* (b**2)* X * Lamb1 * (l - h* Lamb2) *rhoR)/((-1 +
+                        (b**2))* (Lamb1**2)* ((l - h *Lamb2)**2) *(rhoR**2))))
+    retw1 = (-cR + b *(-1 + cR + w2) + Lamb1* (l - h*Lamb2)*rhoR* radterm + (b**2)*(1 +
+                Lamb1*(-l + h *Lamb2) *rhoR* radterm))/(b**2)
+    return retw1
+
+def asymBDl1l12(w2, X, scDict):
+    rhoR, b, cR, h, l = scDict['inspSensRet'], scDict['b'], scDict['cRet'], scDict['rateRetHi'], scDict['rateRetLo']
+    Lamb1, Lamb2 = scDict['rateSup_1'], scDict['rateSup_2']
+    radterm = sqroot(((b**2)*X)/((-1 + (b**2))* l * Lamb1* (-1 + Lamb2)*rhoR))
+    retw1 = 1 + (-1 + w2)/b - 2* l *Lamb1*(-1 + Lamb2)*radterm *rhoR + (2* l*Lamb1* (-1 + Lamb2)*rhoR* radterm) /(b**2)
+    return retw1
+
+def asymBDh12l12(w2, X, scDict):
+    rhoR, b, cR, h, l = scDict['inspSensRet'], scDict['b'], scDict['cRet'], scDict['rateRetHi'], scDict['rateRetLo']
+    Lamb1, Lamb2 = scDict['rateSup_1'], scDict['rateSup_2']
+    retw1 = 2 - cR - w2 - (2* (1 + b)*(h - l)* X *Lamb1* Lamb2 * rhoR)/cR
+    return retw1
+
+b, cRet, rateSup_1, rateSup_2, rateRetLo, rateRetHi, inspSensRet = 0.8, 0.04, 0.75, 0.95, 0.6, 0.95, 0.75
+priceSup_1, priceSup_2 = 0.25, 0.25 # Placeholders
+X = 0.08
+scDict = {'b': b, 'cRet': cRet, 'rateRetLo': rateRetLo, 'rateRetHi': rateRetHi, 'inspSensRet': inspSensRet,
+          'rateSup_1': rateSup_1, 'rateSup_2': rateSup_2, 'priceSup_1': priceSup_1, 'priceSup_2': priceSup_2}
+# Shows the retailer's preferred strategy for various wholesale prices and quality rates of symmetric suppliers
+numpts = 200  # Resolution of price pixels
+
+plotMat = np.empty((numpts, numpts, 7))  # h12, l12, h1, l1, h2, N, empty; l2 ignored as doesn't arise
+plotMat[:] = 0
+w1Noh1 = w1Whereh1Invalid(X, scDict)
+for w1Ind, w1Curr in enumerate(np.arange(0.001, 0.999, (0.999-0.001)/numpts)):
+    scDict['priceSup_1'] = w1Curr
+    for w2Ind, w2Curr in enumerate(np.arange(0.001, 0.999, (0.999-0.001)/numpts)):
+        scDict['priceSup_2'] = w2Curr
+        if w2Curr > w1Curr:  # Only consider w2>w1
+            q1h2, q2h2 = RetOptQuants(4, scDict['b'], scDict['cRet'], w1Curr, w2Curr)
+            h2Util = RetUtil(X, scDict, 1, scDict['rateSup_1'], scDict['rateSup_2'], q1h2, q2h2)
+            q1h1, q2h1 = RetOptQuants(2, scDict['b'], scDict['cRet'], w1Curr, w2Curr)
+            h1Util = RetUtil(X, scDict, 1, scDict['rateSup_1'], scDict['rateSup_2'], q1h1, q2h1)
+            if (h2Util < 0 and h1Util < 0) or (w2Curr>0.9 and w1Curr > w1Noh1):  # N strategy dominates
+                plotMat[w1Ind, w2Ind, 5] = 1
+            else:  # A positive strategy exists
+                if w1Curr >= asymBDh1h2(w2Curr, X, scDict) and w1Curr >= asymBDh2h12(w2Curr, X, scDict):  # h2
+                    plotMat[w1Ind, w2Ind, 4] = 1
+                elif w1Curr < asymBDh1h2(w2Curr, X, scDict) and w1Curr >= asymBDh1l1(w2Curr, X, scDict) \
+                        and w1Curr < asymBDh1h12(w2Curr, X, scDict):  # h1
+                    plotMat[w1Ind, w2Ind, 2] = 1
+                elif w1Curr < asymBDh1l1(w2Curr, X, scDict) \
+                    and w1Curr < asymBDl1l12(w2Curr, X, scDict):  # l1
+                    plotMat[w1Ind, w2Ind, 3] = 1
+                elif w1Curr < asymBDh2h12(w2Curr, X, scDict) and w1Curr >= asymBDh1h12(w2Curr, X, scDict) \
+                        and w1Curr >= asymBDh12l12(w2Curr, X, scDict):  # h12
+                    plotMat[w1Ind, w2Ind, 0] = 1
+                elif w1Curr >= asymBDl1l12(w2Curr, X, scDict) \
+                        and w1Curr < asymBDh12l12(w2Curr, X, scDict):  # l12
+                    plotMat[w1Ind, w2Ind, 1] = 1
+        else:
+            plotMat[w1Ind, w2Ind, 6] = 1
+
+for i in range(numpts):
+    for j in range(numpts):
+        if np.sum(plotMat[i, j, :]) < 1.0:
+            # print('point ' + str(i) + ' '+ str(j))
+            plotMat[i, j, 4] = 1.0
+
+
+# and (w1Curr < asymBDh12l1(w2Curr, X, scDict) or np.isnan(asymBDh12l1(w2Curr, X, scDict))) \
+# and (w1Curr >= asymBDh12l1(w2Curr, X, scDict) or np.isnan(asymBDh12l1(w2Curr, X, scDict))) \
+
+# List approximate intersection points here
+# wInt1, wInt2, wInt3, wInt4 = 0.424, 0.443, 0.58, 0.54
+# wBDh1l12, wBDl1l12 = wStartBDh1l12(X, scDict), wStartBDl1l12A(X, scDict)
+
+# Get boundary lines
+wVec = np.arange(0.001, 0.999, (0.999-0.001)/numpts)
+# wAVec, wYVec, wBVec, bdAVec, bdYVec, bdBVec = [], [], [], [], [], []
+# bdAadj, bdAadj2, bdBadj = 0.022, 0.019,0.0025
+# bdYadj = 0.010
+# for wCurr in wVec:
+#     if wCurr <= wInt1:
+#         wAVec.append(wCurr)
+#         bdAVec.append(BDh12l12(wCurr, X, scDict)+bdAadj)
+#         wYVec.append(wCurr)
+#         bdYVec.append(BDh12l12(wCurr, X, scDict)+bdYadj)
+#     elif wCurr > wInt1+0.002:
+#         wAVec.append(wCurr)
+#         bdAVec.append(BDh12h1(wCurr, X, scDict)+bdAadj2)
+#     if wCurr <= wInt1-0.009:
+#         wBVec.append(wCurr)
+#         bdBVec.append(BDh12l12(wCurr, X, scDict) - bdBadj)
+#     if wCurr >= wBDh1l12 and wCurr <= wInt1: # Upper portion of h1-l12 boundary
+#         wYVec.append(wCurr+0.005)
+#         bdYVec.append(BDh1l12A(wCurr, X, scDict)+bdYadj)
+#     if wCurr >= wBDh1l12 and wCurr <= wInt2: # Lower portion of h1-l12 boundary
+#         wYVec.append(wCurr)
+#         bdYVec.append(BDh1l12B(wCurr, X, scDict)+bdYadj)
+#         wBVec.append(wCurr-0.008)
+#         bdBVec.append(BDh1l12B(wCurr, X, scDict))
+#     if wCurr > wInt2 and wCurr < wInt3:  # h1-l1 boundary
+#         wYVec.append(wCurr)
+#         bdYVec.append(BDh1l1(wCurr, X, scDict))
+# for wCurr in reversed(wVec):
+#     if wCurr >= wBDh1l12 and wCurr <= wInt1-0.006: # Upper portion of h1-l12 boundary
+#         wBVec.append(wCurr - 0.02)
+#         bdBVec.append(BDh1l12A(wCurr, X, scDict))
+#     if wCurr >= wBDl1l12 and wCurr < wInt2-0.003: # Upper portion of l1-l12 boundary
+#         wBVec.append(wCurr)
+#         bdBVec.append(BDl1l12A(wCurr, X, scDict))
+# for wCurr in wVec:
+#     if wCurr >= wBDl1l12 and wCurr <= wInt4: # Lower portion of l1-l12 boundary
+#         wBVec.append(wCurr)
+#         bdBVec.append(BDl1l12B(wCurr, X, scDict))
+
+alval, reglabsize, bdlabsize, bdWidth = 0.5, 18, 22, 2.5
+fig = plt.figure()
+ax = fig.add_subplot(111)
+
+eqcolors = ['royalblue', 'indianred', 'cornflowerblue', 'lightcoral', 'skyblue', 'dimgray', 'gainsboro']
+labels = ['h12', 'l12', 'h1', 'l1', 'h2', 'N', 'NA']
+
+imlist = []
+for eqind in reversed(range(len(labels))):
+    mycmap = matplotlib.colors.ListedColormap(['none', eqcolors[eqind]], name='from_list', N=None)
+    # if eqcolors[eqind] == 'black':  # No alpha transparency
+    #     im = ax.imshow(eqStrat_matList[eqind], vmin=0, vmax=1, aspect='auto',
+    #                         extent=(0, CthetaMax, 0, cSupMax),
+    #                         origin="lower", cmap=mycmap, alpha=1)
+    # else:
+    im = ax.imshow(plotMat[:,:,eqind], vmin=0, vmax=1, aspect='auto',
+                            extent=(0, 1, 0, 1),
+                            origin="lower", cmap=mycmap, alpha=alval)
+    imlist.append(im)
+# Plot boundaries
+# plt.plot(wAVec, bdAVec, dashes=[0.7, 0.7], color='indigo', alpha=0.8, linewidth=bdWidth)
+# plt.plot(wYVec, bdYVec, '-.', color='darkgreen', alpha=0.8, linewidth=bdWidth)
+# plt.plot(wBVec, bdBVec, '--', color='saddlebrown', alpha=0.8, linewidth=bdWidth)
+plt.ylim(0, 1.0)
+plt.xlim(0, 1.0)
+# plt.text(0.85, 0.5, 'N', color='dimgray', fontsize=reglabsize)
+# plt.text(0.37, 0.92, 'h12', color='dimgray', fontsize=reglabsize)
+# plt.text(0.1, 0.3, 'l12', color='dimgray', fontsize=reglabsize)
+# plt.text(0.57, 0.71, 'h1', color='dimgray', fontsize=reglabsize)
+# plt.text(0.48, 0.39, 'l1', color='dimgray', fontsize=reglabsize)
+# plt.text(0.57, 0.85, r'$\mathbf{\Lambda}^\text{A}$', color='indigo', fontsize=bdlabsize, alpha=0.9)
+# plt.text(0.46, 0.61, r'$\mathbf{\Lambda}^\text{Y}$', color='darkgreen', fontsize=bdlabsize, alpha=0.9)
+# plt.text(0.35, 0.35, r'$\mathbf{\Lambda}^\text{B}$', color='saddlebrown', fontsize=bdlabsize, alpha=0.9)
+plt.xlabel(r'$w_2$', fontsize=14)
+plt.ylabel(r'$w_1$', fontsize=14, rotation=0, labelpad=10)
+# ax.yaxis.set_label_coords(-0.09, 0.47)
+# plt.savefig('retailerStratPrefsAsym.png', dpi=300, bbox_inches='tight')
+plt.show()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
