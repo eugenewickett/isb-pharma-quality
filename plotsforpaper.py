@@ -2134,32 +2134,60 @@ for w1Ind, w1Curr in enumerate(np.arange(0.001, 0.999, (0.999-0.001)/numpts)):
         else:
             plotMat[w1Ind, w2Ind, 6] = 1
 
+# Fill in weird blanks
 for i in range(numpts):
     for j in range(numpts):
         if np.sum(plotMat[i, j, :]) < 1.0:
             # print('point ' + str(i) + ' '+ str(j))
             plotMat[i, j, 4] = 1.0
 
-
-# and (w1Curr < asymBDh12l1(w2Curr, X, scDict) or np.isnan(asymBDh12l1(w2Curr, X, scDict))) \
-# and (w1Curr >= asymBDh12l1(w2Curr, X, scDict) or np.isnan(asymBDh12l1(w2Curr, X, scDict))) \
-
-# List approximate intersection points here
-# wInt1, wInt2, wInt3, wInt4 = 0.424, 0.443, 0.58, 0.54
+# List approximate intersection points here WRT w2
+wInt1, wInt2, wInt3, wInt4, wInt5 = 0.32, 0.415, 0.632, 0.8, 0.81
 # wBDh1l12, wBDl1l12 = wStartBDh1l12(X, scDict), wStartBDl1l12A(X, scDict)
 
 # Get boundary lines
 wVec = np.arange(0.001, 0.999, (0.999-0.001)/numpts)
-# wAVec, wYVec, wBVec, bdAVec, bdYVec, bdBVec = [], [], [], [], [], []
-# bdAadj, bdAadj2, bdBadj = 0.022, 0.019,0.0025
-# bdYadj = 0.010
-# for wCurr in wVec:
+wQVec, wYVec, wDVec, bdQVec, bdYVec, bdDVec = [], [], [], [], [], []
+bdQadj, bdDadj = 0.005, 0.005
+bdYadj, bdYadj2 = 0.007, 0.004
+for w2Curr in wVec:  # wQ boundary
+    if w2Curr <= wInt1 and w2Curr > asymBDh2h12(w2Curr, X, scDict) + bdQadj:
+        wQVec.append(w2Curr)
+        bdQVec.append(asymBDh2h12(w2Curr, X, scDict))
+    elif w2Curr > wInt1 and w2Curr <= wInt4:
+        wQVec.append(w2Curr)
+        bdQVec.append(asymBDh2h12(w2Curr, X, scDict))
+    elif w2Curr > wInt4 and w2Curr <= wInt5:
+        wQVec.append(w2Curr)
+        bdQVec.append(asymBDh1h2(w2Curr, X, scDict))
+for w2Curr in wVec:  # wY boundary
+    if w2Curr <= wInt1 and w2Curr > asymBDh2h12(w2Curr, X, scDict) + bdQadj:
+        wYVec.append(w2Curr)
+        bdYVec.append(asymBDh2h12(w2Curr, X, scDict)-bdYadj)
+    elif w2Curr > wInt1 and w2Curr <= wInt2:
+        wYVec.append(w2Curr)
+        bdYVec.append(asymBDh12l12(w2Curr, X, scDict))
+    elif w2Curr > wInt2 and w2Curr <= wInt3:
+        wYVec.append(w2Curr+bdYadj2)
+        bdYVec.append(asymBDh1h12(w2Curr, X, scDict))
+    elif w2Curr > wInt3:
+        wYVec.append(w2Curr)
+        bdYVec.append(asymBDh1l1(w2Curr, X, scDict))
+for w2Curr in wVec:  # wD boundary
+    if w2Curr <= wInt3:
+        wDVec.append(w2Curr)
+        bdDVec.append(asymBDl1l12(w2Curr, X, scDict) + bdDadj)
+    if w2Curr > wInt3 and w2Curr <= wInt4:
+        wDVec.append(w2Curr)
+        bdDVec.append(asymBDh1h12(w2Curr, X, scDict) + bdDadj)
+
+#
 #     if wCurr <= wInt1:
 #         wAVec.append(wCurr)
 #         bdAVec.append(BDh12l12(wCurr, X, scDict)+bdAadj)
 #         wYVec.append(wCurr)
 #         bdYVec.append(BDh12l12(wCurr, X, scDict)+bdYadj)
-#     elif wCurr > wInt1+0.002:
+#     elif wCurr > wInt1+0.02:
 #         wAVec.append(wCurr)
 #         bdAVec.append(BDh12h1(wCurr, X, scDict)+bdAadj2)
 #     if wCurr <= wInt1-0.009:
@@ -2176,15 +2204,8 @@ wVec = np.arange(0.001, 0.999, (0.999-0.001)/numpts)
 #     if wCurr > wInt2 and wCurr < wInt3:  # h1-l1 boundary
 #         wYVec.append(wCurr)
 #         bdYVec.append(BDh1l1(wCurr, X, scDict))
-# for wCurr in reversed(wVec):
-#     if wCurr >= wBDh1l12 and wCurr <= wInt1-0.006: # Upper portion of h1-l12 boundary
-#         wBVec.append(wCurr - 0.02)
-#         bdBVec.append(BDh1l12A(wCurr, X, scDict))
-#     if wCurr >= wBDl1l12 and wCurr < wInt2-0.003: # Upper portion of l1-l12 boundary
-#         wBVec.append(wCurr)
-#         bdBVec.append(BDl1l12A(wCurr, X, scDict))
 # for wCurr in wVec:
-#     if wCurr >= wBDl1l12 and wCurr <= wInt4: # Lower portion of l1-l12 boundary
+#     if wCurr >= wBDl1l12+0.01 and wCurr <= wInt4: # Lower portion of l1-l12 boundary
 #         wBVec.append(wCurr)
 #         bdBVec.append(BDl1l12B(wCurr, X, scDict))
 
@@ -2208,23 +2229,26 @@ for eqind in reversed(range(len(labels))):
                             origin="lower", cmap=mycmap, alpha=alval)
     imlist.append(im)
 # Plot boundaries
-# plt.plot(wAVec, bdAVec, dashes=[0.7, 0.7], color='indigo', alpha=0.8, linewidth=bdWidth)
-# plt.plot(wYVec, bdYVec, '-.', color='darkgreen', alpha=0.8, linewidth=bdWidth)
-# plt.plot(wBVec, bdBVec, '--', color='saddlebrown', alpha=0.8, linewidth=bdWidth)
+plt.plot(wQVec, bdQVec, dashes=[0.7, 0.7], color='indigo', alpha=0.8, linewidth=bdWidth)
+plt.plot(wYVec, bdYVec, '-.', color='darkgreen', alpha=0.8, linewidth=bdWidth)
+plt.plot(wDVec, bdDVec, '--', color='saddlebrown', alpha=0.8, linewidth=bdWidth)
 plt.ylim(0, 1.0)
 plt.xlim(0, 1.0)
-# plt.text(0.85, 0.5, 'N', color='dimgray', fontsize=reglabsize)
-# plt.text(0.37, 0.92, 'h12', color='dimgray', fontsize=reglabsize)
-# plt.text(0.1, 0.3, 'l12', color='dimgray', fontsize=reglabsize)
-# plt.text(0.57, 0.71, 'h1', color='dimgray', fontsize=reglabsize)
-# plt.text(0.48, 0.39, 'l1', color='dimgray', fontsize=reglabsize)
-# plt.text(0.57, 0.85, r'$\mathbf{\Lambda}^\text{A}$', color='indigo', fontsize=bdlabsize, alpha=0.9)
-# plt.text(0.46, 0.61, r'$\mathbf{\Lambda}^\text{Y}$', color='darkgreen', fontsize=bdlabsize, alpha=0.9)
-# plt.text(0.35, 0.35, r'$\mathbf{\Lambda}^\text{B}$', color='saddlebrown', fontsize=bdlabsize, alpha=0.9)
+plt.text(0.9, 0.78, 'N', color='dimgray', fontsize=reglabsize)
+plt.text(0.36, 0.28, 'h12', color='dimgray', fontsize=reglabsize)
+plt.text(0.17, 0.07, 'l12', color='dimgray', fontsize=reglabsize)
+plt.text(0.86, 0.56, 'h1', color='dimgray', fontsize=reglabsize)
+plt.text(0.56, 0.8, 'h2', color='dimgray', fontsize=reglabsize)
+plt.annotate('', xy=(0.72, 0.67), xytext=(0.625, 0.785), arrowprops=dict(arrowstyle="-", color='dimgray'))
+plt.text(0.75, 0.16, 'l1', color='dimgray', fontsize=reglabsize)
+plt.text(0.28, 0.48, r'$\mathbf{w}^\text{Q}$', color='indigo', fontsize=bdlabsize, alpha=0.9)
+plt.annotate('', xy=(0.4, 0.38), xytext=(0.335, 0.475), arrowprops=dict(arrowstyle="-", color='indigo'))
+plt.text(0.62, 0.38, r'$\mathbf{w}^\text{Y}$', color='darkgreen', fontsize=bdlabsize, alpha=0.9)
+plt.text(0.335, 0.05, r'$\mathbf{w}^\text{D}$', color='saddlebrown', fontsize=bdlabsize, alpha=0.9)
 plt.xlabel(r'$w_2$', fontsize=14)
 plt.ylabel(r'$w_1$', fontsize=14, rotation=0, labelpad=10)
 # ax.yaxis.set_label_coords(-0.09, 0.47)
-# plt.savefig('retailerStratPrefsAsym.png', dpi=300, bbox_inches='tight')
+plt.savefig('retailerStratPrefsAsym.png', dpi=300, bbox_inches='tight')
 plt.show()
 
 
