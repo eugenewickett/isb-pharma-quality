@@ -666,8 +666,19 @@ plt.show(block=True)
 ###############
 # DIFFERENT DETECTION MECHANISM
 ###############
+plt.rcParams["font.family"] = "serif"
+plt.rcParams['mathtext.fontset'] = 'stix'
+
 w12_delt_0 = 0.05
-lamb12_delt_0 = 0.05
+lamb12_delt_0 = 0.2
+
+b_0, cR_0 = 0.8, 0.051
+lambretlo_0, lambrethi_0 = 0.6, 0.95
+sens_0, fpr_0 = 0.75, 0.00
+lambsup, lambsup1, lambsup2 = 0.95, 0.95, 0.95
+lamb12_delt_0 = 0.2
+Ltheta_max = 8
+Ltheta_vec = np.arange(0, Ltheta_max, 0.02)
 
 def UtilsRet_Scen5_quantdetect(detect_const, lambsup1, lambsup2, Ltheta, b, c, w1, w2, lambretlo, lambrethi,
                                sens, fpr):
@@ -723,7 +734,7 @@ def UtilsRet_Scen5_quantdetect(detect_const, lambsup1, lambsup2, Ltheta, b, c, w
 
 lambsup1, lambsup2 = 0.9-lamb12_delt_0, 0.9
 Ltheta = 0.12
-pol_list, q_list = UtilsRet_Scen5_quantdetect(0, lambsup1, lambsup2, Ltheta, b_0, c_0, w_0-w12_delt_0, w_0,
+pol_list, q_list = UtilsRet_Scen5_quantdetect(0, lambsup1, lambsup2, Ltheta, b_0, cR_0, w_0-w12_delt_0, w_0,
                                                      lambretlo_0, lambrethi_0, sens_0, fpr_0)
 
 def RetQuantInvestPlots_WRT_w(numpts, detect_const, lambsup1, lambsup2, Ltheta, b, c, lambretlo, lambrethi, sens, fpr):
@@ -751,7 +762,7 @@ def RetQuantInvestPlots_WRT_w(numpts, detect_const, lambsup1, lambsup2, Ltheta, 
     return q1mat, q2mat, investmat
 
 numpts = 20  # MODIFY AS NEEDED
-q1mat, q2mat, investmat = RetQuantInvestPlots_WRT_w(numpts, 0, lambsup2-lamb12_delt_0, lambsup2, Ltheta_0, b_0, c_0,
+q1mat, q2mat, investmat = RetQuantInvestPlots_WRT_w(numpts, 0, lambsup2-lamb12_delt_0, lambsup2, Ltheta_0, b_0, cR_0,
                                                     lambretlo_0, lambrethi_0, sens_0, fpr_0)
 
 d1 = np.linspace(0.01, 0.99, numpts)
@@ -783,15 +794,15 @@ im3 = ax3.imshow(investmat.T, vmin=0, vmax=1,
                 origin="lower", cmap=cmapname, interpolation='none')
 
 ax1.set_title(r'$q_{1}$')
-ax1.set_xlabel(r'$w_2$', fontsize=12)
+ax1.set_xlabel(r'$w_2$', fontsize=14)
 ax1.set_ylabel(r'$w_1$', rotation=0, fontsize=12, labelpad=15)
 
 ax2.set_title(r'$q_{2}$')
-ax2.set_xlabel(r'$w_2$', fontsize=12)
+ax2.set_xlabel(r'$w_2$', fontsize=14)
 ax2.set_ylabel(r'$w_1$', rotation=0, fontsize=12, labelpad=15)
 
 ax3.set_title('Retailer quality investment')
-ax3.set_xlabel(r'$w_2$', fontsize=12)
+ax3.set_xlabel(r'$w_2$', fontsize=14)
 ax3.set_ylabel(r'$w_1$', rotation=0, fontsize=12, labelpad=15)
 
 # Add sliders for changing the parameters
@@ -801,7 +812,7 @@ slvertgap = 0.02
 b_slider_ax = fig.add_axes([0.1, slstrtval, 0.65, slht])
 b_slider = Slider(b_slider_ax, 'b', 0.01, 0.99, valinit=b_0)
 c_slider_ax = fig.add_axes([0.1, slstrtval-slvertgap, 0.65, slht])
-c_slider = Slider(c_slider_ax, 'c', 0.01, 0.99, valinit=c_0)
+c_slider = Slider(c_slider_ax, 'c', 0.01, 0.29, valinit=cR_0)
 lambretlo_slider_ax = fig.add_axes([0.1, slstrtval-slvertgap*2, 0.65, slht])
 lambretlo_slider = Slider(lambretlo_slider_ax, r'$\lambda^{lo}$', 0.01, 0.99, valinit=lambretlo_0)
 lambrethi_slider_ax = fig.add_axes([0.1, slstrtval-slvertgap*3, 0.65, slht])
@@ -842,6 +853,7 @@ lambsup2_slider.on_changed(sliders_on_changed)
 lambdelt_slider.on_changed(sliders_on_changed)
 Ltheta_slider.on_changed(sliders_on_changed)
 
+plt.savefig('approxQuantDetect.png', dpi=300, bbox_inches='tight')
 plt.show(block=True)
 
 ####################

@@ -2100,7 +2100,7 @@ X = 0.08
 scDict = {'b': b, 'cRet': cRet, 'rateRetLo': rateRetLo, 'rateRetHi': rateRetHi, 'inspSensRet': inspSensRet,
           'rateSup_1': rateSup_1, 'rateSup_2': rateSup_2, 'priceSup_1': priceSup_1, 'priceSup_2': priceSup_2}
 # Shows the retailer's preferred strategy for various wholesale prices and quality rates of symmetric suppliers
-numpts = 200  # Resolution of price pixels
+numpts = 1200  # Resolution of price pixels
 
 plotMat = np.empty((numpts, numpts, 7))  # h12, l12, h1, l1, h2, N, empty; l2 ignored as doesn't arise
 plotMat[:] = 0
@@ -2142,7 +2142,7 @@ for i in range(numpts):
             plotMat[i, j, 4] = 1.0
 
 # List approximate intersection points here WRT w2
-wInt1, wInt2, wInt3, wInt4, wInt5 = 0.32, 0.415, 0.632, 0.8, 0.81
+wInt1, wInt2, wInt3, wInt4, wInt5 = 0.32, 0.415, 0.632, 0.79, 0.81
 # wBDh1l12, wBDl1l12 = wStartBDh1l12(X, scDict), wStartBDl1l12A(X, scDict)
 
 # Get boundary lines
