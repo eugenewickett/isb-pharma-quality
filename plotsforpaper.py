@@ -1183,7 +1183,7 @@ XLLUB, XLLsqzUB, XLHUB, XLHLB = XUBLL(scDict, Y), XUBLLsqz(scDict, Y), XUBLH(scD
 XLHsqzUB, XHHLB = XUBLHsqzAtY0(scDict), XLBHHAtY0(scDict)
 # CthLHFOCLB, CthLHexpLB, CthLHFOCUB = CthetaLHFOCLB(scDict), CthetaLHexpIRLB(scDict), CthetaLHFOCUB(scDict)
 # (CthLHsqzUB, _), CthLHsqztwoUB, CthLLsqzUB = CthetaLHsqzUB(scDict), CthetaLHsqztwoUB(scDict), CthetaLLsqzUB(scDict)
-Xmax = 1.3*XHHLB
+Xmax = 1.4
 Xvec = np.arange(0, Xmax, 0.001)
 LLprices = np.empty((Xvec.shape[0], 2))
 LLprices[:] = np.nan
@@ -1211,30 +1211,32 @@ fig = plt.figure()
 al = 0.9
 LLcol, LLsqzcol, HHcol, HHhldcol = 'red', 'deeppink', 'blue', 'cornflowerblue'
 LHcols = ['indigo', 'mediumorchid', 'mediumorchid']  # LHFOC, LHsqz, LHhld
-lnwd, textgap = 5, 0.015
+lnwd, textgap = 5, 0.013
 
-plt.plot(Xvec, LLprices[:, 0], linewidth=lnwd, color=LLcol, alpha=al)
-plt.plot(Xvec, LLsqzprices[:, 0], linewidth=lnwd, color=LLsqzcol, alpha=al)
+K = 1.4  # Needed for adjustment to theta
+
+plt.plot(Xvec/K, LLprices[:, 0], linewidth=lnwd, color=LLcol, alpha=al)
+plt.plot(Xvec/K, LLsqzprices[:, 0], linewidth=lnwd, color=LLsqzcol, alpha=al)
 # plt.plot(Xvec, LHhldprices[:, 0], linewidth=lnwd, color=LHcols[2], alpha=al)
 # plt.plot(Xvec, LHhldprices[:, 1], type='--', linewidth=lnwd, color=LHcols[0], alpha=al)
-plt.plot(Xvec, LHprices[:, 0], linewidth=lnwd, color=LHcols[0], alpha=al)
-plt.plot(Xvec, LHprices[:, 1], '--', linewidth=lnwd, color=LHcols[0], alpha=al)
-plt.plot(Xvec, LHsqzprices[:, 0], linewidth=lnwd, color=LHcols[1], alpha=al)
-plt.plot(Xvec, LHsqzprices[:, 1], '--', linewidth=lnwd, color=LHcols[1], alpha=al)
+plt.plot(Xvec/K, LHprices[:, 0], linewidth=lnwd, color=LHcols[0], alpha=al)
+plt.plot(Xvec/K, LHprices[:, 1], '--', linewidth=lnwd, color=LHcols[0], alpha=al)
+plt.plot(Xvec/K, LHsqzprices[:, 0], linewidth=lnwd, color=LHcols[1], alpha=al)
+plt.plot(Xvec/K, LHsqzprices[:, 1], '--', linewidth=lnwd, color=LHcols[1], alpha=al)
 # plt.plot(Xvec, HHhldprices[:, 0], linewidth=lnwd, color=HHsqzcol, alpha=al)
 # plt.plot(Xvec, HHhldprices[:, 1], linewidth=lnwd, color=HHsqzcol, alpha=al)
-plt.plot(Xvec, HHprices[:, 0], linewidth=lnwd, color=HHcol, alpha=al)
+plt.plot(Xvec/K, HHprices[:, 0], linewidth=lnwd, color=HHcol, alpha=al)
 plt.ylim(0, 0.4)
-plt.xlim(0, Xmax)
-plt.xlabel(r'$\Gamma^{\text{R}}$', fontsize=11)
+plt.xlim(0, Xmax/K)
+plt.xlabel(r'$\theta^{\text{R}}$', fontsize=11)
 plt.ylabel(r'$w$', fontsize=11, rotation=0, labelpad=14)
-plt.text(0.09, LLprices[0, 0]+textgap, r'$LL$ (FOC)', color=LLcol, fontsize=14)
-plt.text(0.4-textgap, LLsqzprices[660, 0], r'$LL$ (sqz)', color=LLsqzcol, fontsize=14)
-plt.text(0.78-textgap, LHsqzprices[1050, 0], r'$LH$ (sqz)', color=LHcols[1], fontsize=14)
-plt.text(0.63, LHprices[700, 1]+textgap, r'$LH$ (FOC)', color=LHcols[0], fontsize=14)
-plt.text(1.07, HHprices[-1, 0]+textgap, r'$HH$ (FOC)', color=HHcol, fontsize=14)
-plt.text(XLHsqzUB+textgap, LHsqzprices[1100, 0]-textgap, r'Supplier 1', color='black', fontsize=8, fontstyle='italic')
-plt.text(XLHsqzUB+textgap, LHsqzprices[1100, 1]-textgap, r'Supplier 2', color='black', fontsize=8, fontstyle='italic')
+plt.text(0.09/K, LLprices[0, 0]+textgap, r'$LL$ (FOC)', color=LLcol, fontsize=14)
+plt.text(0.4/K-textgap, LLsqzprices[660, 0], r'$LL$ (sqz)', color=LLsqzcol, fontsize=14)
+plt.text(0.78/K-textgap, LHsqzprices[1050, 0], r'$LH$ (sqz)', color=LHcols[1], fontsize=14)
+plt.text(0.63/K, LHprices[700, 1]+textgap, r'$LH$ (FOC)', color=LHcols[0], fontsize=14)
+plt.text(1.09/K, HHprices[-1, 0]+textgap, r'$HH$ (FOC)', color=HHcol, fontsize=14)
+plt.text(XLHsqzUB/K+textgap, LHsqzprices[1100, 0]-textgap, r'Supplier 1', color='black', fontsize=8, fontstyle='italic')
+plt.text(XLHsqzUB/K+textgap, LHsqzprices[1100, 1]-textgap, r'Supplier 2', color='black', fontsize=8, fontstyle='italic')
 plt.savefig('priceWRTX.png', dpi=300, bbox_inches='tight')
 plt.show()
 
@@ -1268,33 +1270,35 @@ LLcol, LLsqzcol, HHcol, HHhldcol = 'red', 'deeppink', 'blue', 'cornflowerblue'
 LHcols = ['indigo', 'mediumorchid', 'mediumorchid']  # LHFOC, LHsqz, LHhld
 lnwd, textgap = 5, 0.0015
 
-plt.plot(Yvec, LLprices[:, 0], linewidth=lnwd, color=LLcol, alpha=al)
-plt.plot(Yvec, LHhldprices[:, 0], linewidth=lnwd, color=LHcols[2], alpha=al)
-plt.plot(Yvec, LHhldprices[:, 1], '--', linewidth=lnwd, color=LHcols[2], alpha=al)
-plt.plot(Yvec, LHprices[:, 0], linewidth=lnwd, color=LHcols[0], alpha=al)
-plt.plot(Yvec, LHprices[:, 1], '--', linewidth=lnwd, color=LHcols[0], alpha=al)
-plt.plot(Yvec, HHhldprices[:, 0], linewidth=lnwd, color=HHhldcol, alpha=al)
-plt.plot(Yvec, HHhldprices[:, 1], linewidth=lnwd, color=HHhldcol, alpha=al)
-plt.plot(Yvec, HHprices[:, 0], linewidth=lnwd, color=HHcol, alpha=al)
+K = 1.4  # Needed for adjustment to theta
+
+plt.plot(Yvec/K, LLprices[:, 0], linewidth=lnwd, color=LLcol, alpha=al)
+plt.plot(Yvec/K, LHhldprices[:, 0], linewidth=lnwd, color=LHcols[2], alpha=al)
+plt.plot(Yvec/K, LHhldprices[:, 1], '--', linewidth=lnwd, color=LHcols[2], alpha=al)
+plt.plot(Yvec/K, LHprices[:, 0], linewidth=lnwd, color=LHcols[0], alpha=al)
+plt.plot(Yvec/K, LHprices[:, 1], '--', linewidth=lnwd, color=LHcols[0], alpha=al)
+plt.plot(Yvec/K, HHhldprices[:, 0], linewidth=lnwd, color=HHhldcol, alpha=al)
+plt.plot(Yvec/K, HHhldprices[:, 1], linewidth=lnwd, color=HHhldcol, alpha=al)
+plt.plot(Yvec/K, HHprices[:, 0], linewidth=lnwd, color=HHcol, alpha=al)
 plt.ylim(0, 0.4)
-plt.xlim(0, Ymax)
-plt.xlabel(r'$\Gamma^{\text{S}}$', fontsize=11)
+plt.xlim(0, Ymax/K)
+plt.xlabel(r'$\theta^{\text{S}}$', fontsize=11)
 plt.ylabel(r'$w$', fontsize=11, rotation=0, labelpad=14)
-plt.text(0.002, 0.18, r'$LL$ (FOC)', color=LLcol, fontsize=14)
-plt.text(0.035, 0.295, r'$LH$ (hld)', color=LHcols[2], fontsize=14)
-plt.annotate('', xy=(0.05, 0.20), xytext=(0.042, 0.28), arrowprops=dict(arrowstyle="->",
+plt.text(0.002/K, 0.18, r'$LL$ (FOC)', color=LLcol, fontsize=14)
+plt.text(0.035/K, 0.295, r'$LH$ (hld)', color=LHcols[2], fontsize=14)
+plt.annotate('', xy=(0.05/K, 0.20), xytext=(0.042/K, 0.28), arrowprops=dict(arrowstyle="->",
                                         color = LHcols[2]))
-plt.text(0.045, 0.355, r'$LH$ (FOC)', color=LHcols[0], fontsize=14)
-plt.annotate('', xy=(0.056, 0.21), xytext=(0.052, 0.35), arrowprops=dict(arrowstyle="->",
+plt.text(0.045/K, 0.355, r'$LH$ (FOC)', color=LHcols[0], fontsize=14)
+plt.annotate('', xy=(0.056/K, 0.21), xytext=(0.052/K, 0.35), arrowprops=dict(arrowstyle="->",
                                         color = LHcols[0]))
-plt.text(0.061, 0.22, r'$HH$ (FOC)', color=HHcol, fontsize=14)
-plt.annotate('', xy=(0.05, 0.20), xytext=(0.042, 0.28), arrowprops=dict(arrowstyle="->",
+plt.text(0.061/K, 0.22, r'$HH$ (FOC)', color=HHcol, fontsize=14)
+plt.annotate('', xy=(0.05/K, 0.20), xytext=(0.042/K, 0.28), arrowprops=dict(arrowstyle="->",
                                         color = LHcols[2]))
-plt.text(0.06, 0.09, r'$HH$ (hld)', color=HHhldcol, fontsize=14)
-plt.annotate('', xy=(0.059, 0.19), xytext=(0.066, 0.108), arrowprops=dict(arrowstyle="->",
+plt.text(0.06/K, 0.09, r'$HH$ (hld)', color=HHhldcol, fontsize=14)
+plt.annotate('', xy=(0.059/K, 0.19), xytext=(0.066/K, 0.108), arrowprops=dict(arrowstyle="->",
                                         color = HHhldcol))
-plt.text(0.039, 0.13, r'Supplier 1', color='black', fontsize=8, fontstyle='italic')
-plt.text(0.039, 0.18, r'Supplier 2', color='black', fontsize=8, fontstyle='italic')
+plt.text(0.039/K, 0.13, r'Supplier 1', color='black', fontsize=8, fontstyle='italic')
+plt.text(0.039/K, 0.18, r'Supplier 2', color='black', fontsize=8, fontstyle='italic')
 plt.savefig('priceWRTY.png', dpi=300, bbox_inches='tight')
 plt.show()
 
@@ -1337,12 +1341,13 @@ for Xind in range(Xvec.shape[0]):
         YvecHH.append(YLBHHIR(scDict, currX))
 
 # Adjust to switch to inspection probabilities
-# Xvec = Xvec / Kpen
-# YvecLL = [YvecLL[i]/Kpen for i in range(len(YvecLL))]
-# YvecLHlo = [YvecLHlo[i]/Kpen for i in range(len(YvecLHlo))]
-# YvecLHhi = [YvecLHhi[i]/Kpen for i in range(len(YvecLHhi))]
-# YvecHH = [YvecHH[i]/Kpen for i in range(len(YvecHH))]
-Kpen =1
+Kpen =1.4
+Xvec = Xvec / Kpen
+YvecLL = [YvecLL[i]/Kpen for i in range(len(YvecLL))]
+YvecLHlo = [YvecLHlo[i]/Kpen for i in range(len(YvecLHlo))]
+YvecLHhi = [YvecLHhi[i]/Kpen for i in range(len(YvecLHhi))]
+YvecHH = [YvecHH[i]/Kpen for i in range(len(YvecHH))]
+
 
 alval, lnwd = 0.6, 3
 LLcol, LHcol, HHcol = 'red', 'purple', 'mediumblue'
@@ -1379,8 +1384,8 @@ ax.set_xbound(0, Xmax/Kpen)
 ax.set_ybound(0, Ymax/Kpen)
 # plt.xlabel(r'$\theta^{\text{R}}$', fontsize=11)
 # plt.ylabel(r'$\theta^{\text{S}}$', fontsize=11, rotation=0, labelpad=14)
-plt.xlabel(r'$\Gamma^{\text{R}}$', fontsize=11)
-plt.ylabel(r'$\Gamma^{\text{S}}$', fontsize=11, rotation=0, labelpad=14)
+plt.xlabel(r'$\theta^{\text{R}}$', fontsize=11)
+plt.ylabel(r'$\theta^{\text{S}}$', fontsize=11, rotation=0, labelpad=14)
 plt.savefig('eqplot_example.png', dpi=300, bbox_inches='tight')
 plt.show()
 
@@ -2251,7 +2256,139 @@ plt.ylabel(r'$w_1$', fontsize=14, rotation=0, labelpad=10)
 plt.savefig('retailerStratPrefsAsym.png', dpi=300, bbox_inches='tight')
 plt.show()
 
+#####################
+# Social welfare plots
+#####################
+def XYMatsForPlot(numpts, Xmax, Ymax, scDict):
+    # Generate array of X,Y where all equilibria are valid
+    Xvec, Yvec = np.arange(0, Xmax, Xmax/numpts), np.arange(0, Ymax, Ymax/numpts)
+    eqLabels = ['LLFOC', 'LLsqz', 'LHhld', 'LHFOC', 'LHsqz', 'HHhld', 'HHFOC']
+    eqList = np.zeros((len(eqLabels), Xvec.shape[0], Yvec.shape[0]))
 
+    for Xcurr in Xvec:
+        for Ycurr in Yvec:
+            # LLFOC
+            
+
+
+
+    return eqList
+
+def SocWelEqMatsForPlotIgnorePens(numpts, Xmax, Ymax, scDict):
+    # Generate list of equilibria matrices for plotting
+    # Social-welfare maximizing equilibria is chosen if multiple equilibria exist
+    uL, uH = scDict['uL'], scDict['uH']
+    eqList = CthetaCbetaMatsForPlot(numpts, Ctheta_max, Cbeta_max, scDict)
+    CthetaVec = np.arange(0, Ctheta_max, (Ctheta_max) / numpts)
+    CbetaVec = np.arange(0, Cbeta_max, (Cbeta_max) / numpts)
+
+    retMat = eqList[0].copy()
+    retMat[:] = np.nan
+    for currCthetaind, currCtheta in enumerate(CthetaVec):
+        for currCbetaind, currCbeta in enumerate(CbetaVec):
+            possEqList = [i for i in range(eqList.shape[0]) if eqList[i, currCthetaind, currCbetaind]==1]
+            if len(possEqList) == 1:
+                w1, w2, cS1, cS2, qual1, qual2 = GetPricesFromEq(possEqList[0], scDict, currCtheta, currCbeta)
+                retMat[currCthetaind, currCbetaind] = SocWelIgnorePens(uH, uL, w1, w2, cS1, cS2, qual1, qual2, currCtheta, currCbeta)
+            if len(possEqList) > 1:
+                w1, w2, cS1, cS2, qual1, qual2 = GetPricesFromEq(possEqList[0], scDict, currCtheta, currCbeta)
+                currSocWel = SocWelIgnorePens(uH, uL, w1, w2, cS1, cS2, qual1, qual2, currCtheta, currCbeta)
+                for i in range(1, len(possEqList)):
+                    w1, w2, cS1, cS2, qual1, qual2 = GetPricesFromEq(possEqList[i], scDict, currCtheta, currCbeta)
+                    iSocWel = SocWelIgnorePens(uH, uL, w1, w2, cS1, cS2, qual1, qual2, currCtheta, currCbeta)
+                    if iSocWel > currSocWel:
+                        currSocWel = iSocWel
+                retMat[currCthetaind, currCbetaind] = currSocWel
+
+    return retMat
+b, cSup, supRateLo, supRateHi, inspSensRet, inspSensSup, uL, uH = 0.8, 0.1, 0.8, 1.0, 1.0, 1.0, 0.5, 5.0
+scDict = {'b': b, 'cSup': cSup, 'supRateLo': supRateLo, 'supRateHi': supRateHi, 'inspSensRet': inspSensRet,
+          'inspSensSup': inspSensSup, 'uL': uL, 'uH': uH}
+Xmax, Ymax, step, Kpen = 1.4, 0.15, 0.001, 3
+Xvec = np.arange(0, Xmax, step)
+YvecLL, YvecLHlo, YvecLHhi, YvecHH = [], [], [], []
+# Define breakpoints and Y bounds that are not a function of X
+XLLUB, XLHLBJunc, XLHUB, XHHLBJunc = XUBLL(scDict, 0), XLBLHJunc(scDict), XUBLH(scDict, 0), XLBHHJunc(scDict)
+YLLUB, YLHLB, YLHUB, YHHLB = YUBLL(scDict, 0), YLBLHhldLLFOC(scDict, 0), YUBLH(scDict, 0), YLBHHhld(scDict, 0)
+
+for Xind in range(Xvec.shape[0]):
+    currX = Xvec[Xind]
+    # LL line
+    if currX <= XLLUB:
+        YvecLL.append(YLLUB)
+    elif currX > XLLUB:
+        YvecLL.append(YUBLLsqz(scDict, currX))
+    # LHlo line
+    if currX < XLHLBJunc:
+        YvecLHlo.append(YLHLB)
+    elif currX >= XLHLBJunc and currX < XLHUB:
+        YvecLHlo.append(YLBLHIR(scDict, currX))
+    else:
+        YvecLHlo.append(-1)
+    # LHhi line
+    if currX < XLHUB:
+        YvecLHhi.append(YLHUB)
+    else:
+        YvecLHhi.append(YUBLHsqz(scDict, currX))
+    # HH line
+    if currX < XHHLBJunc:
+        YvecHH.append(YHHLB)
+    else:
+        YvecHH.append(YLBHHIR(scDict, currX))
+
+
+
+eqMat, CthMat, SWMat = SocWelEqMatsForPlotIgnorePens(numpts, Xmax, Ymax scDict)
+
+
+# Adjust to switch to inspection probabilities
+Kpen =1.4
+Xvec = Xvec / Kpen
+YvecLL = [YvecLL[i]/Kpen for i in range(len(YvecLL))]
+YvecLHlo = [YvecLHlo[i]/Kpen for i in range(len(YvecLHlo))]
+YvecLHhi = [YvecLHhi[i]/Kpen for i in range(len(YvecLHhi))]
+YvecHH = [YvecHH[i]/Kpen for i in range(len(YvecHH))]
+
+
+alval, lnwd = 0.6, 3
+LLcol, LHcol, HHcol = 'red', 'purple', 'mediumblue'
+
+labels = ['LL feasible', 'LH feasible', 'HH feasible', 'LL'+r'$\cap$'+'LH', 'LH'+r'$\cap$'+'HH']
+colList = [LLcol, LHcol, HHcol]
+plt.rcParams['hatch.linewidth'] = 2.3
+
+fig = plt.figure()
+ax = fig.add_subplot(111)
+plt.plot(Xvec, YvecLL, linewidth=lnwd, color=LLcol, alpha=alval)
+plt.plot(Xvec, YvecLHlo, linewidth=lnwd, color=LHcol, alpha=alval)
+plt.plot(Xvec, YvecLHhi, linewidth=lnwd, color=LHcol, alpha=alval)
+plt.plot(Xvec, YvecHH, linewidth=lnwd, color=HHcol, alpha=alval)
+patches = [mpatches.Patch(color=colList[i], label=labels[i], alpha=alval*0.5) for i in range(len(colList))]
+patches.append(mpatches.Patch(facecolor=LLcol, edgecolor=LHcol,hatch='////',alpha=alval*0.4,label=labels[3]))
+patches.append(mpatches.Patch(facecolor=HHcol, edgecolor=LHcol,hatch='////',alpha=alval*0.4,label=labels[4]))
+ax.legend(handles=patches, loc='upper right', borderaxespad=0.4, fontsize=8)
+plt.fill_between(Xvec, YvecLHlo, YvecLL, hatch='////', facecolor=LLcol, edgecolor=LHcol, alpha=alval*0.2)
+plt.fill_between(Xvec, YvecLL, np.repeat(-1, len(YvecLL)), facecolor=LLcol, alpha=alval*0.3)
+plt.fill_between(Xvec, YvecLL, YvecLHhi, facecolor=LHcol, alpha=alval*0.3)
+plt.fill_between(Xvec, YvecLHhi, np.repeat(1, len(YvecLHhi)), facecolor=HHcol, alpha=alval*0.3)
+plt.fill_between(Xvec, YvecLHhi, YvecHH, hatch='////', facecolor=HHcol, edgecolor=LHcol, alpha=alval*0.2)
+plt.text((Xmax*0.15)/Kpen, Ymax*0.2/Kpen, 'LL', color=LLcol, fontsize=15, fontweight='bold')
+plt.text(0.4/Kpen, (Ymax*0.87)/Kpen, 'HH', color=HHcol, fontsize=15, fontweight='bold')
+plt.text(Xmax*0.5/Kpen, Ymax*0.6/Kpen, 'LH', color=LHcol, fontsize=15, fontweight='bold')
+plt.text(Xmax*0.39/Kpen, Ymax*0.01/Kpen, 'LL\n'+r'$\cap$'+'\nLH', color='black', fontsize=15, fontweight='bold',
+         horizontalalignment='center', alpha=0.7)
+plt.annotate('', xy=(0.59/Kpen, 0.01/Kpen), xytext=(0.65/Kpen, 0.013/Kpen), arrowprops=dict(arrowstyle="-", color='black'))
+plt.text(Xmax*0.71/Kpen, Ymax*0.01/Kpen, 'LH\n'+r'$\cap$'+'\nHH', color='black', fontsize=15, fontweight='bold',
+         horizontalalignment='center', alpha=0.7)
+plt.annotate('', xy=(1.04/Kpen, 0.01/Kpen), xytext=(1.10/Kpen, 0.013/Kpen), arrowprops=dict(arrowstyle="-", color='black'))
+ax.set_xbound(0, Xmax/Kpen)
+ax.set_ybound(0, Ymax/Kpen)
+# plt.xlabel(r'$\theta^{\text{R}}$', fontsize=11)
+# plt.ylabel(r'$\theta^{\text{S}}$', fontsize=11, rotation=0, labelpad=14)
+plt.xlabel(r'$\theta^{\text{R}}$', fontsize=11)
+plt.ylabel(r'$\theta^{\text{S}}$', fontsize=11, rotation=0, labelpad=14)
+plt.savefig('eqplot_example.png', dpi=300, bbox_inches='tight')
+plt.show()
 
 
 
