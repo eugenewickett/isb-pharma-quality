@@ -800,7 +800,7 @@ def YUBLLsqz(scDict, X):
     denominator = 8 * (b ** 2 - 1) * inspSensSup * (supRateHi - supRateLo)
     return numerator / denominator
 
-def XUBLH(scDict, Y):
+def XUBLH(scDict):
     # Returns LH-FOC UB in X
     b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
     inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
@@ -816,7 +816,7 @@ def YUBLH(scDict, X):
     denom = 8 * (b ** 4 - 5 * b ** 2 + 4) * inspSensSup * (supRateHi - supRateLo)
     return numer / denom
 
-def XLBLHretIR(scDict, Y):
+def XLBLHretIR(scDict):
     # Returns LH-FOC LB in X where the Y-IR LB needs to be used for X larger than this X LB
     b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
     inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
@@ -846,7 +846,7 @@ def XLBLHAtY0(scDict,step=0.001):
     # Returns LH-FOC LB in X at Y=0
     b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
     inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
-    start = XUBLH(scDict, 0)
+    start = XUBLH(scDict)
     # Check if start is even valid at 0
     if YLBLHIR(scDict, start) > 0:
         retval = start
@@ -972,7 +972,7 @@ def XLBHHAtY0(scDict,step=0.001):
     # Returns HH-FOC LB in X at Y=0
     b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
     inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
-    start = XUBLH(scDict, 0)
+    start = XUBLH(scDict)
     # Increase until YLBHHIR falls below 0
     if YLBHHIR(scDict, start) < 0:
         retval = start
@@ -1016,7 +1016,7 @@ def YLBLHhldAtX0(scDict,step=0.001):
 
 def XLBLHJunc(scDict, step=0.001):
     # Returns juncture where YLHhldLB hits YLHFOCIRLB
-    currX, found = XLBLHretIR(scDict, 0), False
+    currX, found = XLBLHretIR(scDict), False
     targ = YLBLHhldLLFOC(scDict, 0)
     while not found:
         currYLHRetIR = YLBLHIR(scDict, currX)
@@ -1179,7 +1179,7 @@ X, Y = 0.0, 0.0
 scDict = {'b': b, 'cSup': cSup, 'supRateLo': supRateLo, 'supRateHi': supRateHi,
           'inspSensRet': inspSensRet, 'inspSensSup': inspSensSup}
 
-XLLUB, XLLsqzUB, XLHUB, XLHLB = XUBLL(scDict, Y), XUBLLsqz(scDict, Y), XUBLH(scDict, Y), XLBLHAtY0(scDict)
+XLLUB, XLLsqzUB, XLHUB, XLHLB = XUBLL(scDict, Y), XUBLLsqz(scDict, Y), XUBLH(scDict), XLBLHAtY0(scDict)
 XLHsqzUB, XHHLB = XUBLHsqzAtY0(scDict), XLBHHAtY0(scDict)
 # CthLHFOCLB, CthLHexpLB, CthLHFOCUB = CthetaLHFOCLB(scDict), CthetaLHexpIRLB(scDict), CthetaLHFOCUB(scDict)
 # (CthLHsqzUB, _), CthLHsqztwoUB, CthLLsqzUB = CthetaLHsqzUB(scDict), CthetaLHsqztwoUB(scDict), CthetaLLsqzUB(scDict)
@@ -1312,7 +1312,7 @@ Xmax, Ymax, step, Kpen = 1.4, 0.15, 0.001, 3
 Xvec = np.arange(0, Xmax, step)
 YvecLL, YvecLHlo, YvecLHhi, YvecHH = [], [], [], []
 # Define breakpoints and Y bounds that are not a function of X
-XLLUB, XLHLBJunc, XLHUB, XHHLBJunc = XUBLL(scDict, 0), XLBLHJunc(scDict), XUBLH(scDict, 0), XLBHHJunc(scDict)
+XLLUB, XLHLBJunc, XLHUB, XHHLBJunc = XUBLL(scDict, 0), XLBLHJunc(scDict), XUBLH(scDict), XLBHHJunc(scDict)
 YLLUB, YLHLB, YLHUB, YHHLB = YUBLL(scDict, 0), YLBLHhldLLFOC(scDict, 0), YUBLH(scDict, 0), YLBHHhld(scDict, 0)
 
 for Xind in range(Xvec.shape[0]):
@@ -2264,130 +2264,234 @@ def XYMatsForPlot(numpts, Xmax, Ymax, scDict):
     Xvec, Yvec = np.arange(0, Xmax, Xmax/numpts), np.arange(0, Ymax, Ymax/numpts)
     eqLabels = ['LLFOC', 'LLsqz', 'LHhld', 'LHFOC', 'LHsqz', 'HHhld', 'HHFOC']
     eqList = np.zeros((len(eqLabels), Xvec.shape[0], Yvec.shape[0]))
-
-    for Xcurr in Xvec:
-        for Ycurr in Yvec:
+    # Define breakpoints and Y bounds that are not a function of X
+    XLLUB, XLHLBJunc, XLHUB, XHHLBJunc = XUBLL(scDict, 0), XLBLHJunc(scDict), XUBLH(scDict), XLBHHJunc(scDict)
+    YLLUB, YLHLB, YLHUB, YHHLB = YUBLL(scDict, 0), YLBLHhldLLFOC(scDict, 0), YUBLH(scDict, 0), YLBHHhld(scDict, 0)
+    YLBLHFOC, XUBLHFOCIC, YHHFOCLB, XHHICUB = YLBLHIC(scDict, 0), XLBLHretIR(scDict), YLBHHIC(scDict, 0), XHHIC(scDict)
+    for Xind, Xcurr in enumerate(Xvec):
+        YLLsqzUB, YLHsqzUB = YUBLLsqz(scDict, Xcurr), YUBLHsqz(scDict, Xcurr)
+        for Yind, Ycurr in enumerate(Yvec):
             # LLFOC
-            
-
-
+            if Xcurr <= XLLUB and Ycurr <= YLLUB:
+                eqList[0, Xind, Yind] = 1
+            # LLsqz
+            if Xcurr > XLLUB and Ycurr <= YLLsqzUB:
+                eqList[1, Xind, Yind] = 1
+            # LHhld
+            if Xcurr <= XUBLHFOCIC and Ycurr >= YLHLB and Ycurr < YLBLHFOC:
+                eqList[2, Xind, Yind] = 1
+            if Xcurr > XUBLHFOCIC and Xcurr < XLHLBJunc and Ycurr < YLBLHIR(scDict, Xcurr):
+                eqList[2, Xind, Yind] = 1
+            # LHFOC
+            if Xcurr <= XUBLHFOCIC and Ycurr >= YLBLHFOC and Ycurr <= YLHUB:
+                eqList[3, Xind, Yind] = 1
+            if Xcurr > XUBLHFOCIC and Xcurr <= XLHUB and Ycurr >= YLBLHIR(scDict, Xcurr) and Ycurr <= YLHUB:
+                eqList[3, Xind, Yind] = 1
+            # LHsqz
+            if Xcurr > XLHUB and Ycurr <= YLHsqzUB:
+                eqList[4, Xind, Yind] = 1
+            # HHhld
+            if Xcurr <= XHHICUB and Ycurr >= YHHLB and Ycurr < YHHFOCLB:
+                eqList[5, Xind, Yind] = 1
+            if Xcurr > XHHICUB and Xcurr <= XHHLBJunc and Ycurr >= YHHLB and Ycurr < YLBHHIR(scDict, Xcurr):
+                eqList[5, Xind, Yind] = 1
+            # HHFOC
+            if Xcurr <= XHHICUB and Ycurr >= YHHFOCLB:
+                eqList[6, Xind, Yind] = 1
+            if Xcurr > XHHICUB and Ycurr >= YLBHHIR(scDict, Xcurr):
+                eqList[6, Xind, Yind] = 1
+    # Remove equilibrium where both suppliers do better under simultaneous equilibrium
+    for Xind, Xcurr in enumerate(Xvec):
+        for Yind, Ycurr in enumerate(Yvec):
+            possEqList = [i for i in range(eqList.shape[0]) if eqList[i, Xind, Yind] == 1]
+            if len(possEqList) > 1:
+                sup1utilList, sup2utilList = [], []
+                for curreq in possEqList:
+                    w1, w2, cS1, cS2, qual1, qual2 = GetPricesFromEq(curreq, scDict, Xcurr, Ycurr)
+                    q1, q2 = quantOpt(w1, w2, scDict['b']), quantOpt(w2, w1, scDict['b'])
+                    sup1utilList.append(SupUtil(q1, w1, cS1, qual1, Ycurr)),
+                    sup2utilList.append(SupUtil(q2, w2, cS2, qual2, Ycurr))
+                if sup1utilList[1] > sup1utilList[0] and sup2utilList[1] > sup2utilList[0]:
+                    removeInd = possEqList[0]
+                elif sup1utilList[0] > sup1utilList[1] and sup2utilList[0] > sup2utilList[1]:
+                    removeInd = possEqList[1]
+                else:
+                    removeInd = -10
+                if removeInd >= 0:
+                    eqList[removeInd, Xind, Yind] = 0
 
     return eqList
+
+def GetPricesFromEq(eq, scDict, X, Y):
+    # Returns set of prices for given argruments
+    cS, supRateHi, supRateLo = scDict['cSup'], scDict['supRateHi'], scDict['supRateLo']
+    if eq == 0:  # LLFOC
+        w1, w2 = PriceLL(scDict, X, Y)
+        cS1, cS2 = 0, 0
+        qual1, qual2 = supRateLo, supRateLo
+    if eq == 1:  # LLsqz
+        w1, w2 = PriceLLsqz(scDict, X, Y)
+        cS1, cS2 = 0, 0
+        qual1, qual2 = supRateLo, supRateLo
+    if eq == 2:  # LHhld
+        w1, w2 = PriceLHhld(scDict, X, Y)
+        cS1, cS2 = 0, cS
+        qual1, qual2 = supRateLo, supRateHi
+    if eq == 3:  # LHFOC
+        w1, w2 = PriceLH(scDict, X, Y)
+        cS1, cS2 = 0, cS
+        qual1, qual2 = supRateLo, supRateHi
+    if eq == 4:  # LHsqz
+        w1, w2 = PriceLHsqz(scDict, X, Y)
+        cS1, cS2 = 0, cS
+        qual1, qual2 = supRateLo, supRateHi
+    if eq == 5:  # HHhld
+        w1, w2 = PriceHHhld(scDict, X, Y)
+        cS1, cS2 = cS, cS
+        qual1, qual2 = supRateHi, supRateHi
+    if eq == 6:  # HHFOC
+        w1, w2 = PriceHH(scDict, X, Y)
+        cS1, cS2 = cS, cS
+        qual1, qual2 = supRateHi, supRateHi
+    if eq < 0 or eq > 6:
+        print('Enter a valid equilibrium code')
+        return np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
+    return w1, w2, cS1, cS2, qual1, qual2
+
+def SocWelIgnorePens(uH, uL, w1, w2, cS1, cS2, lambsup1, lambsup2):
+    # Social welfare
+    q1, q2 = quantOpt(w1, w2, b), quantOpt(w2, w1, b)
+    return q1*(uH*(lambsup1)+uL*(1-lambsup1)-cS1) + q2*(uH*(lambsup2)+uL*(1-lambsup2)-cS2)
 
 def SocWelEqMatsForPlotIgnorePens(numpts, Xmax, Ymax, scDict):
     # Generate list of equilibria matrices for plotting
     # Social-welfare maximizing equilibria is chosen if multiple equilibria exist
     uL, uH = scDict['uL'], scDict['uH']
-    eqList = CthetaCbetaMatsForPlot(numpts, Ctheta_max, Cbeta_max, scDict)
-    CthetaVec = np.arange(0, Ctheta_max, (Ctheta_max) / numpts)
-    CbetaVec = np.arange(0, Cbeta_max, (Cbeta_max) / numpts)
+    eqList = XYMatsForPlot(numpts, Xmax, Ymax, scDict)
+    Xvec = np.arange(0, Xmax, (Xmax) / numpts)
+    Yvec = np.arange(0, Ymax, (Ymax) / numpts)
 
     retMat = eqList[0].copy()
     retMat[:] = np.nan
-    for currCthetaind, currCtheta in enumerate(CthetaVec):
-        for currCbetaind, currCbeta in enumerate(CbetaVec):
-            possEqList = [i for i in range(eqList.shape[0]) if eqList[i, currCthetaind, currCbetaind]==1]
+    for Xind, Xcurr in enumerate(Xvec):
+        for Yind, Ycurr in enumerate(Yvec):
+            possEqList = [i for i in range(eqList.shape[0]) if eqList[i, Xind, Yind]==1]
             if len(possEqList) == 1:
-                w1, w2, cS1, cS2, qual1, qual2 = GetPricesFromEq(possEqList[0], scDict, currCtheta, currCbeta)
-                retMat[currCthetaind, currCbetaind] = SocWelIgnorePens(uH, uL, w1, w2, cS1, cS2, qual1, qual2, currCtheta, currCbeta)
+                w1, w2, cS1, cS2, qual1, qual2 = GetPricesFromEq(possEqList[0], scDict, Xcurr, Ycurr)
+                retMat[Xind, Yind] = SocWelIgnorePens(uH, uL, w1, w2, cS1, cS2, qual1, qual2)
             if len(possEqList) > 1:
-                w1, w2, cS1, cS2, qual1, qual2 = GetPricesFromEq(possEqList[0], scDict, currCtheta, currCbeta)
-                currSocWel = SocWelIgnorePens(uH, uL, w1, w2, cS1, cS2, qual1, qual2, currCtheta, currCbeta)
+                w1, w2, cS1, cS2, qual1, qual2 = GetPricesFromEq(possEqList[0], scDict, Xcurr, Ycurr)
+                currSocWel = SocWelIgnorePens(uH, uL, w1, w2, cS1, cS2, qual1, qual2)
                 for i in range(1, len(possEqList)):
-                    w1, w2, cS1, cS2, qual1, qual2 = GetPricesFromEq(possEqList[i], scDict, currCtheta, currCbeta)
-                    iSocWel = SocWelIgnorePens(uH, uL, w1, w2, cS1, cS2, qual1, qual2, currCtheta, currCbeta)
+                    w1, w2, cS1, cS2, qual1, qual2 = GetPricesFromEq(possEqList[i], scDict, Xcurr, Ycurr)
+                    iSocWel = SocWelIgnorePens(uH, uL, w1, w2, cS1, cS2, qual1, qual2)
                     if iSocWel > currSocWel:
                         currSocWel = iSocWel
-                retMat[currCthetaind, currCbetaind] = currSocWel
+                retMat[Xind, Yind] = currSocWel
+            if len(possEqList) == 0:
+                print('problem at X='+str(Xcurr)+', Y='+str(Ycurr))
 
     return retMat
-b, cSup, supRateLo, supRateHi, inspSensRet, inspSensSup, uL, uH = 0.8, 0.1, 0.8, 1.0, 1.0, 1.0, 0.5, 5.0
+
+
+
+b, cSup, supRateLo, supRateHi, inspSensRet, inspSensSup, uL, uH = 0.65, 0.13, 0.8, 1.0, 1.0, 1.0, -1, 7.0
 scDict = {'b': b, 'cSup': cSup, 'supRateLo': supRateLo, 'supRateHi': supRateHi, 'inspSensRet': inspSensRet,
           'inspSensSup': inspSensSup, 'uL': uL, 'uH': uH}
-Xmax, Ymax, step, Kpen = 1.4, 0.15, 0.001, 3
-Xvec = np.arange(0, Xmax, step)
-YvecLL, YvecLHlo, YvecLHhi, YvecHH = [], [], [], []
-# Define breakpoints and Y bounds that are not a function of X
-XLLUB, XLHLBJunc, XLHUB, XHHLBJunc = XUBLL(scDict, 0), XLBLHJunc(scDict), XUBLH(scDict, 0), XLBHHJunc(scDict)
-YLLUB, YLHLB, YLHUB, YHHLB = YUBLL(scDict, 0), YLBLHhldLLFOC(scDict, 0), YUBLH(scDict, 0), YLBHHhld(scDict, 0)
+Xmax, Ymax, step, Kpen, numpts = 1.3, 0.18, 0.001, 2, 29
 
-for Xind in range(Xvec.shape[0]):
-    currX = Xvec[Xind]
-    # LL line
-    if currX <= XLLUB:
-        YvecLL.append(YLLUB)
-    elif currX > XLLUB:
-        YvecLL.append(YUBLLsqz(scDict, currX))
-    # LHlo line
-    if currX < XLHLBJunc:
-        YvecLHlo.append(YLHLB)
-    elif currX >= XLHLBJunc and currX < XLHUB:
-        YvecLHlo.append(YLBLHIR(scDict, currX))
-    else:
-        YvecLHlo.append(-1)
-    # LHhi line
-    if currX < XLHUB:
-        YvecLHhi.append(YLHUB)
-    else:
-        YvecLHhi.append(YUBLHsqz(scDict, currX))
-    # HH line
-    if currX < XHHLBJunc:
-        YvecHH.append(YHHLB)
-    else:
-        YvecHH.append(YLBHHIR(scDict, currX))
+temp = XYMatsForPlot(numpts, Xmax, Ymax, scDict)
+SWmat = SocWelEqMatsForPlotIgnorePens(numpts, Xmax, Ymax, scDict)
 
 
+# Xvec = np.arange(0, Xmax, step)
+# YvecLL, YvecLHlo, YvecLHhi, YvecHH = [], [], [], []
+# # Define breakpoints and Y bounds that are not a function of X
+# XLLUB, XLHLBJunc, XLHUB, XHHLBJunc = XUBLL(scDict, 0), XLBLHJunc(scDict), XUBLH(scDict), XLBHHJunc(scDict)
+# YLLUB, YLHLB, YLHUB, YHHLB = YUBLL(scDict, 0), YLBLHhldLLFOC(scDict, 0), YUBLH(scDict, 0), YLBHHhld(scDict, 0)
+#
+# for Xind in range(Xvec.shape[0]):
+#     currX = Xvec[Xind]
+#     # LL line
+#     if currX <= XLLUB:
+#         YvecLL.append(YLLUB)
+#     elif currX > XLLUB:
+#         YvecLL.append(YUBLLsqz(scDict, currX))
+#     # LHlo line
+#     if currX < XLHLBJunc:
+#         YvecLHlo.append(YLHLB)
+#     elif currX >= XLHLBJunc and currX < XLHUB:
+#         YvecLHlo.append(YLBLHIR(scDict, currX))
+#     else:
+#         YvecLHlo.append(-1)
+#     # LHhi line
+#     if currX < XLHUB:
+#         YvecLHhi.append(YLHUB)
+#     else:
+#         YvecLHhi.append(YUBLHsqz(scDict, currX))
+#     # HH line
+#     if currX < XHHLBJunc:
+#         YvecHH.append(YHHLB)
+#     else:
+#         YvecHH.append(YLBHHIR(scDict, currX))
 
-eqMat, CthMat, SWMat = SocWelEqMatsForPlotIgnorePens(numpts, Xmax, Ymax scDict)
+
+
+# eqMat, CthMat, SWMat = SocWelEqMatsForPlotIgnorePens(numpts, Xmax, Ymax scDict)
 
 
 # Adjust to switch to inspection probabilities
-Kpen =1.4
-Xvec = Xvec / Kpen
-YvecLL = [YvecLL[i]/Kpen for i in range(len(YvecLL))]
-YvecLHlo = [YvecLHlo[i]/Kpen for i in range(len(YvecLHlo))]
-YvecLHhi = [YvecLHhi[i]/Kpen for i in range(len(YvecLHhi))]
-YvecHH = [YvecHH[i]/Kpen for i in range(len(YvecHH))]
-
-
-alval, lnwd = 0.6, 3
-LLcol, LHcol, HHcol = 'red', 'purple', 'mediumblue'
-
-labels = ['LL feasible', 'LH feasible', 'HH feasible', 'LL'+r'$\cap$'+'LH', 'LH'+r'$\cap$'+'HH']
-colList = [LLcol, LHcol, HHcol]
-plt.rcParams['hatch.linewidth'] = 2.3
+# Kpen =1.4
+# Xvec = Xvec / Kpen
+# YvecLL = [YvecLL[i]/Kpen for i in range(len(YvecLL))]
+# YvecLHlo = [YvecLHlo[i]/Kpen for i in range(len(YvecLHlo))]
+# YvecLHhi = [YvecLHhi[i]/Kpen for i in range(len(YvecLHhi))]
+# YvecHH = [YvecHH[i]/Kpen for i in range(len(YvecHH))]
+#
+#
+# alval, lnwd = 0.6, 3
+# LLcol, LHcol, HHcol = 'red', 'purple', 'mediumblue'
+#
+# labels = ['LL feasible', 'LH feasible', 'HH feasible', 'LL'+r'$\cap$'+'LH', 'LH'+r'$\cap$'+'HH']
+# colList = [LLcol, LHcol, HHcol]
+# plt.rcParams['hatch.linewidth'] = 2.3
 
 fig = plt.figure()
 ax = fig.add_subplot(111)
-plt.plot(Xvec, YvecLL, linewidth=lnwd, color=LLcol, alpha=alval)
-plt.plot(Xvec, YvecLHlo, linewidth=lnwd, color=LHcol, alpha=alval)
-plt.plot(Xvec, YvecLHhi, linewidth=lnwd, color=LHcol, alpha=alval)
-plt.plot(Xvec, YvecHH, linewidth=lnwd, color=HHcol, alpha=alval)
-patches = [mpatches.Patch(color=colList[i], label=labels[i], alpha=alval*0.5) for i in range(len(colList))]
-patches.append(mpatches.Patch(facecolor=LLcol, edgecolor=LHcol,hatch='////',alpha=alval*0.4,label=labels[3]))
-patches.append(mpatches.Patch(facecolor=HHcol, edgecolor=LHcol,hatch='////',alpha=alval*0.4,label=labels[4]))
-ax.legend(handles=patches, loc='upper right', borderaxespad=0.4, fontsize=8)
-plt.fill_between(Xvec, YvecLHlo, YvecLL, hatch='////', facecolor=LLcol, edgecolor=LHcol, alpha=alval*0.2)
-plt.fill_between(Xvec, YvecLL, np.repeat(-1, len(YvecLL)), facecolor=LLcol, alpha=alval*0.3)
-plt.fill_between(Xvec, YvecLL, YvecLHhi, facecolor=LHcol, alpha=alval*0.3)
-plt.fill_between(Xvec, YvecLHhi, np.repeat(1, len(YvecLHhi)), facecolor=HHcol, alpha=alval*0.3)
-plt.fill_between(Xvec, YvecLHhi, YvecHH, hatch='////', facecolor=HHcol, edgecolor=LHcol, alpha=alval*0.2)
-plt.text((Xmax*0.15)/Kpen, Ymax*0.2/Kpen, 'LL', color=LLcol, fontsize=15, fontweight='bold')
-plt.text(0.4/Kpen, (Ymax*0.87)/Kpen, 'HH', color=HHcol, fontsize=15, fontweight='bold')
-plt.text(Xmax*0.5/Kpen, Ymax*0.6/Kpen, 'LH', color=LHcol, fontsize=15, fontweight='bold')
-plt.text(Xmax*0.39/Kpen, Ymax*0.01/Kpen, 'LL\n'+r'$\cap$'+'\nLH', color='black', fontsize=15, fontweight='bold',
-         horizontalalignment='center', alpha=0.7)
-plt.annotate('', xy=(0.59/Kpen, 0.01/Kpen), xytext=(0.65/Kpen, 0.013/Kpen), arrowprops=dict(arrowstyle="-", color='black'))
-plt.text(Xmax*0.71/Kpen, Ymax*0.01/Kpen, 'LH\n'+r'$\cap$'+'\nHH', color='black', fontsize=15, fontweight='bold',
-         horizontalalignment='center', alpha=0.7)
-plt.annotate('', xy=(1.04/Kpen, 0.01/Kpen), xytext=(1.10/Kpen, 0.013/Kpen), arrowprops=dict(arrowstyle="-", color='black'))
-ax.set_xbound(0, Xmax/Kpen)
-ax.set_ybound(0, Ymax/Kpen)
+mycmap = matplotlib.colors.ListedColormap(['white', 'darkgreen'], name='from_list', N=None)
+ax.imshow(SWmat.T, vmin=np.nanmin(SWmat), vmax=np.nanmax(SWmat), aspect='auto',
+                            extent=(0, Xmax/Kpen, 0, Ymax/Kpen), cmap='Blues',
+                            origin="lower", alpha=1)
+
+# plt.plot(Xvec, YvecLL, linewidth=lnwd, color=LLcol, alpha=alval)
+# plt.plot(Xvec, YvecLHlo, linewidth=lnwd, color=LHcol, alpha=alval)
+# plt.plot(Xvec, YvecLHhi, linewidth=lnwd, color=LHcol, alpha=alval)
+# plt.plot(Xvec, YvecHH, linewidth=lnwd, color=HHcol, alpha=alval)
+# patches = [mpatches.Patch(color=colList[i], label=labels[i], alpha=alval*0.5) for i in range(len(colList))]
+# patches.append(mpatches.Patch(facecolor=LLcol, edgecolor=LHcol,hatch='////',alpha=alval*0.4,label=labels[3]))
+# patches.append(mpatches.Patch(facecolor=HHcol, edgecolor=LHcol,hatch='////',alpha=alval*0.4,label=labels[4]))
+# ax.legend(handles=patches, loc='upper right', borderaxespad=0.4, fontsize=8)
+# plt.fill_between(Xvec, YvecLHlo, YvecLL, hatch='////', facecolor=LLcol, edgecolor=LHcol, alpha=alval*0.2)
+# plt.fill_between(Xvec, YvecLL, np.repeat(-1, len(YvecLL)), facecolor=LLcol, alpha=alval*0.3)
+# plt.fill_between(Xvec, YvecLL, YvecLHhi, facecolor=LHcol, alpha=alval*0.3)
+# plt.fill_between(Xvec, YvecLHhi, np.repeat(1, len(YvecLHhi)), facecolor=HHcol, alpha=alval*0.3)
+# plt.fill_between(Xvec, YvecLHhi, YvecHH, hatch='////', facecolor=HHcol, edgecolor=LHcol, alpha=alval*0.2)
+# plt.text((Xmax*0.15)/Kpen, Ymax*0.2/Kpen, 'LL', color=LLcol, fontsize=15, fontweight='bold')
+# plt.text(0.4/Kpen, (Ymax*0.87)/Kpen, 'HH', color=HHcol, fontsize=15, fontweight='bold')
+# plt.text(Xmax*0.5/Kpen, Ymax*0.6/Kpen, 'LH', color=LHcol, fontsize=15, fontweight='bold')
+# plt.text(Xmax*0.39/Kpen, Ymax*0.01/Kpen, 'LL\n'+r'$\cap$'+'\nLH', color='black', fontsize=15, fontweight='bold',
+#          horizontalalignment='center', alpha=0.7)
+# plt.annotate('', xy=(0.59/Kpen, 0.01/Kpen), xytext=(0.65/Kpen, 0.013/Kpen), arrowprops=dict(arrowstyle="-", color='black'))
+# plt.text(Xmax*0.71/Kpen, Ymax*0.01/Kpen, 'LH\n'+r'$\cap$'+'\nHH', color='black', fontsize=15, fontweight='bold',
+#          horizontalalignment='center', alpha=0.7)
+# plt.annotate('', xy=(1.04/Kpen, 0.01/Kpen), xytext=(1.10/Kpen, 0.013/Kpen), arrowprops=dict(arrowstyle="-", color='black'))
+# ax.set_xbound(0, Xmax/Kpen)
+# ax.set_ybound(0, Ymax/Kpen)
 # plt.xlabel(r'$\theta^{\text{R}}$', fontsize=11)
 # plt.ylabel(r'$\theta^{\text{S}}$', fontsize=11, rotation=0, labelpad=14)
 plt.xlabel(r'$\theta^{\text{R}}$', fontsize=11)
 plt.ylabel(r'$\theta^{\text{S}}$', fontsize=11, rotation=0, labelpad=14)
-plt.savefig('eqplot_example.png', dpi=300, bbox_inches='tight')
+plt.savefig('SWplot2.png', dpi=300, bbox_inches='tight')  # Change for difft util values
 plt.show()
 
 
