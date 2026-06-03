@@ -943,8 +943,8 @@ def YLBHHhld(scDict, X):
     # Returns Y LB for HH when retailer IR is not considered
     b, cS, supRateLo, supRateHi = scDict['b'], scDict['cSup'], scDict['supRateLo'], scDict['supRateHi']
     inspSensRet, inspSensSup = scDict['inspSensRet'], scDict['inspSensSup']
-    numer = cS* (b*(cS-1)-cS+2)
-    denom = 2*((b-2)**2)*(b+1) *(supRateHi-supRateLo) *inspSensSup
+    numer = cS* (b*(cS-1)-cS+2 )
+    denom = 2*((2-b)**2)*(b+1) *(supRateHi-supRateLo) *inspSensSup
     return numer / denom
 
 def XLBHHIR(scDict):
@@ -1163,13 +1163,20 @@ for eqind in range(len(labels)):
 plt.ylim(0, 1.0)
 plt.xlim(0, 1.0)
 plt.text(0.8, 0.8, 'N', color='dimgray', fontsize=18)
-plt.text(0.55, 0.55, 'HH', color='dimgray', fontsize=18)
-plt.text(0.4, 0.4, 'LH', color='dimgray', fontsize=18)
-plt.text(0.25, 0.25, 'LL', color='dimgray', fontsize=18)
-plt.xlabel(r'$w_1$', fontsize=11)
-plt.ylabel(r'$w_2$', fontsize=11, rotation=0, labelpad=14)
+plt.text(0.56, 0.55, 'HH', color='dimgray', fontsize=18)
+plt.text(0.375, 0.37, 'LH, HH', color='dimgray', fontsize=18)
+plt.text(0.2, 0.19, 'LL, LH, HH', color='dimgray', fontsize=18)
+plt.xlabel(r'$w_1$ (Supplier 1 wholesale price)', fontsize=14)
+plt.ylabel(r'$w_2$ (Supplier 2 wholesale price)', fontsize=14, rotation=90, labelpad=7)
+plt.tick_params(axis='both', which='major', labelsize=12)
+plt.tight_layout()
 plt.savefig('retailerQualityThresholds.png', dpi=300, bbox_inches='tight')
 plt.show()
+
+# plt.xlabel(r'$\theta^{\text{R}}$ (retailer inspection probability)', fontsize=14)
+# plt.ylabel(r'$\theta^{\text{S}}$ (retailer inspection probability)', fontsize=14, rotation=90, labelpad=7)
+# plt.tick_params(axis='both', which='major', labelsize=12)
+# plt.tight_layout()
 
 #####################
 # Wholesale price plots WRT X,Y
@@ -1228,8 +1235,8 @@ plt.plot(Xvec/K, LHsqzprices[:, 1], '--', linewidth=lnwd, color=LHcols[1], alpha
 plt.plot(Xvec/K, HHprices[:, 0], linewidth=lnwd, color=HHcol, alpha=al)
 plt.ylim(0, 0.4)
 plt.xlim(0, Xmax/K)
-plt.xlabel(r'$\theta^{\text{R}}$', fontsize=11)
-plt.ylabel(r'$w$', fontsize=11, rotation=0, labelpad=14)
+plt.xlabel(r'$\theta^{\text{R}}$ (retailer inspection probability)', fontsize=14)
+plt.ylabel(r'$w$ (wholesale price)', fontsize=14, rotation=90, labelpad=7)
 plt.text(0.09/K, LLprices[0, 0]+textgap, r'$LL$ (FOC)', color=LLcol, fontsize=14)
 plt.text(0.4/K-textgap, LLsqzprices[660, 0], r'$LL$ (sqz)', color=LLsqzcol, fontsize=14)
 plt.text(0.78/K-textgap, LHsqzprices[1050, 0], r'$LH$ (sqz)', color=LHcols[1], fontsize=14)
@@ -1237,6 +1244,8 @@ plt.text(0.63/K, LHprices[700, 1]+textgap, r'$LH$ (FOC)', color=LHcols[0], fonts
 plt.text(1.09/K, HHprices[-1, 0]+textgap, r'$HH$ (FOC)', color=HHcol, fontsize=14)
 plt.text(XLHsqzUB/K+textgap, LHsqzprices[1100, 0]-textgap, r'Supplier 1', color='black', fontsize=8, fontstyle='italic')
 plt.text(XLHsqzUB/K+textgap, LHsqzprices[1100, 1]-textgap, r'Supplier 2', color='black', fontsize=8, fontstyle='italic')
+plt.tick_params(axis='both', which='major', labelsize=12)
+plt.tight_layout()
 plt.savefig('priceWRTX.png', dpi=300, bbox_inches='tight')
 plt.show()
 
@@ -1282,8 +1291,8 @@ plt.plot(Yvec/K, HHhldprices[:, 1], linewidth=lnwd, color=HHhldcol, alpha=al)
 plt.plot(Yvec/K, HHprices[:, 0], linewidth=lnwd, color=HHcol, alpha=al)
 plt.ylim(0, 0.4)
 plt.xlim(0, Ymax/K)
-plt.xlabel(r'$\theta^{\text{S}}$', fontsize=11)
-plt.ylabel(r'$w$', fontsize=11, rotation=0, labelpad=14)
+plt.xlabel(r'$\theta^{\text{S}}$ (retailer inspection probability)', fontsize=14)
+plt.ylabel(r'$w$ (wholesale price)', fontsize=14, rotation=90, labelpad=7)
 plt.text(0.002/K, 0.18, r'$LL$ (FOC)', color=LLcol, fontsize=14)
 plt.text(0.035/K, 0.295, r'$LH$ (hld)', color=LHcols[2], fontsize=14)
 plt.annotate('', xy=(0.05/K, 0.20), xytext=(0.042/K, 0.28), arrowprops=dict(arrowstyle="->",
@@ -1299,6 +1308,8 @@ plt.annotate('', xy=(0.059/K, 0.19), xytext=(0.066/K, 0.108), arrowprops=dict(ar
                                         color = HHhldcol))
 plt.text(0.039/K, 0.13, r'Supplier 1', color='black', fontsize=8, fontstyle='italic')
 plt.text(0.039/K, 0.18, r'Supplier 2', color='black', fontsize=8, fontstyle='italic')
+plt.tick_params(axis='both', which='major', labelsize=12)
+plt.tight_layout()
 plt.savefig('priceWRTY.png', dpi=300, bbox_inches='tight')
 plt.show()
 
@@ -1365,7 +1376,7 @@ plt.plot(Xvec, YvecHH, linewidth=lnwd, color=HHcol, alpha=alval)
 patches = [mpatches.Patch(color=colList[i], label=labels[i], alpha=alval*0.5) for i in range(len(colList))]
 patches.append(mpatches.Patch(facecolor=LLcol, edgecolor=LHcol,hatch='////',alpha=alval*0.4,label=labels[3]))
 patches.append(mpatches.Patch(facecolor=HHcol, edgecolor=LHcol,hatch='////',alpha=alval*0.4,label=labels[4]))
-ax.legend(handles=patches, loc='upper right', borderaxespad=0.4, fontsize=8)
+ax.legend(handles=patches, loc='upper right', borderaxespad=0.4, fontsize=10)
 plt.fill_between(Xvec, YvecLHlo, YvecLL, hatch='////', facecolor=LLcol, edgecolor=LHcol, alpha=alval*0.2)
 plt.fill_between(Xvec, YvecLL, np.repeat(-1, len(YvecLL)), facecolor=LLcol, alpha=alval*0.3)
 plt.fill_between(Xvec, YvecLL, YvecLHhi, facecolor=LHcol, alpha=alval*0.3)
@@ -1384,8 +1395,10 @@ ax.set_xbound(0, Xmax/Kpen)
 ax.set_ybound(0, Ymax/Kpen)
 # plt.xlabel(r'$\theta^{\text{R}}$', fontsize=11)
 # plt.ylabel(r'$\theta^{\text{S}}$', fontsize=11, rotation=0, labelpad=14)
-plt.xlabel(r'$\theta^{\text{R}}$', fontsize=11)
-plt.ylabel(r'$\theta^{\text{S}}$', fontsize=11, rotation=0, labelpad=14)
+plt.xlabel(r'$\theta^{\text{R}}$ (retailer inspection probability)', fontsize=14)
+plt.ylabel(r'$\theta^{\text{S}}$ (retailer inspection probability)', fontsize=14, rotation=90, labelpad=7)
+plt.tick_params(axis='both', which='major', labelsize=12)
+plt.tight_layout()
 plt.savefig('eqplot_example.png', dpi=300, bbox_inches='tight')
 plt.show()
 
@@ -1647,7 +1660,7 @@ def RetPrefl2Overl1(X, scDict):
     cRet, priceSup_2, priceSup_1 = scDict['cRet'], scDict['priceSup_2'], scDict['priceSup_1']
     b, rateSup_2, rateSup_1 = scDict['b'], scDict['rateSup_2'], scDict['rateSup_1']
     rateRetLo, rateRetHi, inspSensRet = scDict['rateRetLo'], scDict['rateRetHi'], scDict['inspSensRet']
-    numerator = (priceSup_2 - priceSup_1) * (2 - 2 * cRet - priceSup_1 - priceSup_2)
+    numerator = (priceSup_2 - priceSup_1) * (2 - priceSup_1 - priceSup_2)
     denominator = 4 * rateRetLo * (rateSup_2 - rateSup_1) * inspSensRet
     thresh = numerator / denominator
     if X >= thresh:
@@ -2148,7 +2161,6 @@ for i in range(numpts):
 
 # List approximate intersection points here WRT w2
 wInt1, wInt2, wInt3, wInt4, wInt5 = 0.32, 0.415, 0.632, 0.79, 0.81
-# wBDh1l12, wBDl1l12 = wStartBDh1l12(X, scDict), wStartBDl1l12A(X, scDict)
 
 # Get boundary lines
 wVec = np.arange(0.001, 0.999, (0.999-0.001)/numpts)
@@ -2185,34 +2197,6 @@ for w2Curr in wVec:  # wD boundary
     if w2Curr > wInt3 and w2Curr <= wInt4:
         wDVec.append(w2Curr)
         bdDVec.append(asymBDh1h12(w2Curr, X, scDict) + bdDadj)
-
-#
-#     if wCurr <= wInt1:
-#         wAVec.append(wCurr)
-#         bdAVec.append(BDh12l12(wCurr, X, scDict)+bdAadj)
-#         wYVec.append(wCurr)
-#         bdYVec.append(BDh12l12(wCurr, X, scDict)+bdYadj)
-#     elif wCurr > wInt1+0.02:
-#         wAVec.append(wCurr)
-#         bdAVec.append(BDh12h1(wCurr, X, scDict)+bdAadj2)
-#     if wCurr <= wInt1-0.009:
-#         wBVec.append(wCurr)
-#         bdBVec.append(BDh12l12(wCurr, X, scDict) - bdBadj)
-#     if wCurr >= wBDh1l12 and wCurr <= wInt1: # Upper portion of h1-l12 boundary
-#         wYVec.append(wCurr+0.005)
-#         bdYVec.append(BDh1l12A(wCurr, X, scDict)+bdYadj)
-#     if wCurr >= wBDh1l12 and wCurr <= wInt2: # Lower portion of h1-l12 boundary
-#         wYVec.append(wCurr)
-#         bdYVec.append(BDh1l12B(wCurr, X, scDict)+bdYadj)
-#         wBVec.append(wCurr-0.008)
-#         bdBVec.append(BDh1l12B(wCurr, X, scDict))
-#     if wCurr > wInt2 and wCurr < wInt3:  # h1-l1 boundary
-#         wYVec.append(wCurr)
-#         bdYVec.append(BDh1l1(wCurr, X, scDict))
-# for wCurr in wVec:
-#     if wCurr >= wBDl1l12+0.01 and wCurr <= wInt4: # Lower portion of l1-l12 boundary
-#         wBVec.append(wCurr)
-#         bdBVec.append(BDl1l12B(wCurr, X, scDict))
 
 alval, reglabsize, bdlabsize, bdWidth = 0.5, 18, 22, 2.5
 fig = plt.figure()
@@ -2255,6 +2239,186 @@ plt.ylabel(r'$w_1$', fontsize=14, rotation=0, labelpad=10)
 # ax.yaxis.set_label_coords(-0.09, 0.47)
 plt.savefig('retailerStratPrefsAsym.png', dpi=300, bbox_inches='tight')
 plt.show()
+
+###
+# Third plot adjusted: Asymmetric suppliers, but manually through calculating utility of each strategy
+###
+# Define function that returns utility of each strategy:
+# [h12, l12, h1, l1, h2, l2]
+
+def retUtilQual(scDict, X):
+    # Returns list of retailer utilities for all 6 possible strategies
+    b, cR, w1, w2 = scDict['b'], scDict['cRet'], scDict['priceSup_1'], scDict['priceSup_2']
+    rateRetHi, rateRetLo, inspSensRet = scDict['rateRetHi'], scDict['rateRetLo'], scDict['inspSensRet']
+    lamb1, lamb2 = scDict['rateSup_1'], scDict['rateSup_2']
+    retList = []
+    # h12
+    q1, q2 = ((1-b)*(1-cR)-w1 +b*w2)/(2*(1-b**2)), ((1-b)*(1-cR)-w2 +b*w1)/(2*(1-b**2))
+    if q1>0 and q2 >0:
+        rateRet = rateRetHi
+        prof1 = q1*(invPrice(q1, q2, b) - w1 - cR)
+        prof2 = q2*(invPrice(q2, q1, b) - w2 - cR)
+        pen = X*inspSensRet*(1-lamb1*lamb2*rateRet)
+        retList.append(prof1+prof2-pen)
+    else:
+        retList.append(-1)
+    # l12
+    q1, q2 = ((1 - b)  - w1 + b * w2) / (2 * (1 - b ** 2)), ((1 - b) - w2 + b * w1) / (2 * (1 - b**2))
+    if q1 > 0 and q2 > 0:
+        rateRet = rateRetLo
+        prof1 = q1 * (invPrice(q1, q2, b) - w1)
+        prof2 = q2 * (invPrice(q2, q1, b) - w2)
+        pen = X * inspSensRet * (1 - lamb1 * lamb2 * rateRet)
+        retList.append(prof1 + prof2 - pen)
+    else:
+        retList.append(-1)
+    # h1
+    q1, q2 = (1-cR-w1)/2, 0
+    rateRet = rateRetHi
+    prof1 = q1 * (invPrice(q1, q2, b) - w1 - cR)
+    pen = X * inspSensRet * (1 - lamb1 * rateRet)
+    retList.append(prof1 - pen)
+    # l1
+    q1, q2 = (1-w1)/2, 0
+    rateRet = rateRetLo
+    prof1 = q1 * (invPrice(q1, q2, b) - w1)
+    pen = X * inspSensRet * (1 - lamb1 * rateRet)
+    retList.append(prof1 - pen)
+    # h2
+    q1, q2 = 0, (1-cR-w2)/2
+    rateRet = rateRetHi
+    prof2 = q2 * (invPrice(q2, q1, b) - w2 -cR)
+    pen = X * inspSensRet * (1 - lamb2 * rateRet)
+    retList.append(prof2 - pen)
+    # l2
+    q1, q2 = 0, (1-w2)/2
+    rateRet = rateRetLo
+    prof2 = q2 * (invPrice(q2, q1, b) - w2)
+    pen = X * inspSensRet * (1 - lamb2 * rateRet)
+    retList.append(prof2 - pen)
+    return retList
+
+b, cRet, rateSup_1, rateSup_2, rateRetLo, rateRetHi, inspSensRet = 0.7, 0.05, 0.85, 0.95, 0.65, 0.95, 0.75
+priceSup_1, priceSup_2 = 0.1, 0.26 # Placeholders
+X = 0.1
+scDict = {'b': b, 'cRet': cRet, 'rateRetLo': rateRetLo, 'rateRetHi': rateRetHi, 'inspSensRet': inspSensRet,
+          'rateSup_1': rateSup_1, 'rateSup_2': rateSup_2, 'priceSup_1': priceSup_1, 'priceSup_2': priceSup_2}
+
+numpts = 1300  # Resolution of price pixels
+
+plotMat = np.empty((numpts, numpts, 8))  # h12, l12, h1, l1, h2, l2, N, empty; l2 ignored as doesn't arise
+plotMat[:] = 0
+w1Noh1 = w1Whereh1Invalid(X, scDict)
+for w1Ind, w1Curr in enumerate(np.arange(0.001, 0.999, (0.999-0.001)/numpts)):
+    scDict['priceSup_1'] = w1Curr
+    for w2Ind, w2Curr in enumerate(np.arange(0.001, 0.999, (0.999-0.001)/numpts)):
+        scDict['priceSup_2'] = w2Curr
+        if w2Curr > w1Curr:  # Only consider w2>w1
+            retList = retUtilQual(scDict, X)
+            maxind = retList.index(max(retList))
+            if retList[maxind] < 0: # Pick N
+                plotMat[w1Ind, w2Ind, 6] = 1
+            else:
+                plotMat[w1Ind, w2Ind, maxind] = 1
+        else:
+            plotMat[w1Ind, w2Ind, 7] = 1
+
+# Fill in weird blanks
+for i in range(numpts):
+    for j in range(numpts):
+        if np.sum(plotMat[i, j, :]) < 1.0:
+            # print('point ' + str(i) + ' '+ str(j))
+            plotMat[i, j, 4] = 1.0
+
+wInt1, wInt2, wInt3, wInt4, wInt5 = 0.36, 0.42, 0.39, 0.58, 0.78
+wIntQ = 0.48
+wDXint, wDslope1 = 0.3, 1.32
+wDXint2, wDslope2 = 0.27, 1.4
+wYXint1, wYslope1, wYline1 = 0.48, 1.8, 0.21
+
+# Get boundary lines
+wVec = np.arange(0.001, 0.999, (0.999-0.001)/numpts)
+wQVec, wYVec, wDVec, bdQVec, bdYVec, bdDVec = [], [], [], [], [], []
+bdQadj, bdDadj = 0.005, 0.005
+bdYadj, bdYadj2 = 0.007, 0.002
+for w2Curr in wVec:  # wQ boundary
+    if w2Curr <= -1 and w2Curr > asymBDh2h12(w2Curr, X, scDict) + bdQadj:
+        wQVec.append(w2Curr)
+        bdQVec.append(asymBDh2h12(w2Curr, X, scDict))
+    elif w2Curr > wIntQ and w2Curr <= wInt4:
+        wQVec.append(w2Curr)
+        bdQVec.append(asymBDh2h12(w2Curr, X, scDict))
+    elif w2Curr > wInt4 and w2Curr <= wInt5:
+        wQVec.append(w2Curr)
+        bdQVec.append(asymBDh1h2(w2Curr, X, scDict))
+for w2Curr in wVec:  # wY boundary
+    if w2Curr <= wInt1 and w2Curr > asymBDh2h12(w2Curr, X, scDict) + bdQadj:
+        wYVec.append(w2Curr)
+        bdYVec.append(asymBDh2h12(w2Curr, X, scDict)-bdYadj)
+    if w2Curr > wInt1 and w2Curr <= wInt2:
+        wYVec.append(w2Curr)
+        bdYVec.append(asymBDh12l12(w2Curr, X, scDict))
+for w2Curr in reversed(wVec):
+    if w2Curr <= wInt2 and w2Curr >= wInt3:
+        #print('w2Curr:'+str(w2Curr))
+        wYVec.append(w2Curr+bdYadj2)
+        bdYVec.append(w2Curr*wYslope1 - wYXint1)
+for w2Curr in wVec:
+    if w2Curr > wInt3:
+        wYVec.append(w2Curr)
+        bdYVec.append(wYline1)
+
+for w2Curr in wVec:  # wD boundary
+    if w2Curr <= wInt3:
+        wDVec.append(w2Curr)
+        bdDVec.append(w2Curr*wDslope1 - wDXint + bdDadj)
+    elif w2Curr > wInt3 and w2Curr <= wInt2:
+        wDVec.append(w2Curr)
+        bdDVec.append(w2Curr*wYslope1 - wYXint1 + 0.02)
+    if w2Curr > wInt2 and w2Curr <= wInt4:
+        wDVec.append(w2Curr)
+        bdDVec.append(w2Curr*wDslope2 - wDXint2)
+
+alval, reglabsize, bdlabsize, bdWidth = 0.5, 18, 22, 2.5
+fig = plt.figure()
+ax = fig.add_subplot(111)
+
+eqcolors = ['royalblue', 'indianred', 'cornflowerblue', 'lightcoral',
+            'skyblue', 'orange', 'dimgray', 'gainsboro']
+labels = ['h12', 'l12', 'h1', 'l1', 'h2', 'l2', 'N', 'NA']
+
+imlist = []
+for eqind in reversed(range(len(labels))):
+    mycmap = matplotlib.colors.ListedColormap(['none', eqcolors[eqind]], name='from_list', N=None)
+    im = ax.imshow(plotMat[:,:,eqind], vmin=0, vmax=1, aspect='auto',  extent=(0, 1, 0, 1),
+                                        origin="lower", cmap=mycmap, alpha=alval)
+    imlist.append(im)
+# Plot boundaries
+plt.plot(wQVec, bdQVec, dashes=[0.7, 0.7], color='indigo', alpha=0.8, linewidth=bdWidth)
+plt.plot(wYVec, bdYVec, '-.', color='darkgreen', alpha=0.8, linewidth=bdWidth)
+plt.plot(wDVec, bdDVec, '--', color='saddlebrown', alpha=0.8, linewidth=bdWidth)
+plt.ylim(0, 1.0)
+plt.xlim(0, 1.0)
+plt.text(0.9, 0.78, 'N', color='dimgray', fontsize=reglabsize)
+plt.text(0.23, 0.46, 'h12', color='dimgray', fontsize=reglabsize)
+plt.annotate('', xy=(0.41, 0.38), xytext=(0.32, 0.45), arrowprops=dict(arrowstyle="-", color='dimgray'))
+plt.text(0.15, 0.07, 'l12', color='dimgray', fontsize=reglabsize)
+plt.text(0.8, 0.5, 'h1', color='dimgray', fontsize=reglabsize)
+plt.text(0.56, 0.8, 'h2', color='dimgray', fontsize=reglabsize)
+plt.annotate('', xy=(0.71, 0.68), xytext=(0.625, 0.785), arrowprops=dict(arrowstyle="-", color='dimgray'))
+plt.text(0.7, 0.08, 'l1', color='dimgray', fontsize=reglabsize)
+plt.text(0.42, 0.6, r'$\mathbf{w}^\text{Q}$', color='indigo', fontsize=bdlabsize, alpha=0.9)
+plt.annotate('', xy=(0.56, 0.54), xytext=(0.47, 0.60), arrowprops=dict(arrowstyle="-", color='indigo'))
+plt.text(0.55, 0.24, r'$\mathbf{w}^\text{Y}$', color='darkgreen', fontsize=bdlabsize, alpha=0.9)
+plt.text(0.315, 0.05, r'$\mathbf{w}^\text{D}$', color='saddlebrown', fontsize=bdlabsize, alpha=0.9)
+plt.xlabel(r'$w_2$', fontsize=14)
+plt.ylabel(r'$w_1$', fontsize=14, rotation=0, labelpad=10)
+plt.savefig('retailerStratPrefsAsym.png', dpi=300, bbox_inches='tight')
+plt.show()
+
+
+
+
 
 #####################
 # Social welfare plots
@@ -2395,7 +2559,7 @@ def SocWelEqMatsForPlotIgnorePens(numpts, Xmax, Ymax, scDict):
 
 
 
-b, cSup, supRateLo, supRateHi, inspSensRet, inspSensSup, uL, uH = 0.65, 0.13, 0.8, 1.0, 1.0, 1.0, -1, 7.0
+b, cSup, supRateLo, supRateHi, inspSensRet, inspSensSup, uL, uH = 0.65, 0.13, 0.8, 1.0, 1.0, 1.0, -7, 7.0
 scDict = {'b': b, 'cSup': cSup, 'supRateLo': supRateLo, 'supRateHi': supRateHi, 'inspSensRet': inspSensRet,
           'inspSensSup': inspSensSup, 'uL': uL, 'uH': uH}
 Xmax, Ymax, step, Kpen, numpts = 1.3, 0.18, 0.001, 2, 29
@@ -2403,95 +2567,17 @@ Xmax, Ymax, step, Kpen, numpts = 1.3, 0.18, 0.001, 2, 29
 temp = XYMatsForPlot(numpts, Xmax, Ymax, scDict)
 SWmat = SocWelEqMatsForPlotIgnorePens(numpts, Xmax, Ymax, scDict)
 
-
-# Xvec = np.arange(0, Xmax, step)
-# YvecLL, YvecLHlo, YvecLHhi, YvecHH = [], [], [], []
-# # Define breakpoints and Y bounds that are not a function of X
-# XLLUB, XLHLBJunc, XLHUB, XHHLBJunc = XUBLL(scDict, 0), XLBLHJunc(scDict), XUBLH(scDict), XLBHHJunc(scDict)
-# YLLUB, YLHLB, YLHUB, YHHLB = YUBLL(scDict, 0), YLBLHhldLLFOC(scDict, 0), YUBLH(scDict, 0), YLBHHhld(scDict, 0)
-#
-# for Xind in range(Xvec.shape[0]):
-#     currX = Xvec[Xind]
-#     # LL line
-#     if currX <= XLLUB:
-#         YvecLL.append(YLLUB)
-#     elif currX > XLLUB:
-#         YvecLL.append(YUBLLsqz(scDict, currX))
-#     # LHlo line
-#     if currX < XLHLBJunc:
-#         YvecLHlo.append(YLHLB)
-#     elif currX >= XLHLBJunc and currX < XLHUB:
-#         YvecLHlo.append(YLBLHIR(scDict, currX))
-#     else:
-#         YvecLHlo.append(-1)
-#     # LHhi line
-#     if currX < XLHUB:
-#         YvecLHhi.append(YLHUB)
-#     else:
-#         YvecLHhi.append(YUBLHsqz(scDict, currX))
-#     # HH line
-#     if currX < XHHLBJunc:
-#         YvecHH.append(YHHLB)
-#     else:
-#         YvecHH.append(YLBHHIR(scDict, currX))
-
-
-
-# eqMat, CthMat, SWMat = SocWelEqMatsForPlotIgnorePens(numpts, Xmax, Ymax scDict)
-
-
-# Adjust to switch to inspection probabilities
-# Kpen =1.4
-# Xvec = Xvec / Kpen
-# YvecLL = [YvecLL[i]/Kpen for i in range(len(YvecLL))]
-# YvecLHlo = [YvecLHlo[i]/Kpen for i in range(len(YvecLHlo))]
-# YvecLHhi = [YvecLHhi[i]/Kpen for i in range(len(YvecLHhi))]
-# YvecHH = [YvecHH[i]/Kpen for i in range(len(YvecHH))]
-#
-#
-# alval, lnwd = 0.6, 3
-# LLcol, LHcol, HHcol = 'red', 'purple', 'mediumblue'
-#
-# labels = ['LL feasible', 'LH feasible', 'HH feasible', 'LL'+r'$\cap$'+'LH', 'LH'+r'$\cap$'+'HH']
-# colList = [LLcol, LHcol, HHcol]
-# plt.rcParams['hatch.linewidth'] = 2.3
-
 fig = plt.figure()
 ax = fig.add_subplot(111)
 mycmap = matplotlib.colors.ListedColormap(['white', 'darkgreen'], name='from_list', N=None)
 ax.imshow(SWmat.T, vmin=np.nanmin(SWmat), vmax=np.nanmax(SWmat), aspect='auto',
                             extent=(0, Xmax/Kpen, 0, Ymax/Kpen), cmap='Blues',
                             origin="lower", alpha=1)
-
-# plt.plot(Xvec, YvecLL, linewidth=lnwd, color=LLcol, alpha=alval)
-# plt.plot(Xvec, YvecLHlo, linewidth=lnwd, color=LHcol, alpha=alval)
-# plt.plot(Xvec, YvecLHhi, linewidth=lnwd, color=LHcol, alpha=alval)
-# plt.plot(Xvec, YvecHH, linewidth=lnwd, color=HHcol, alpha=alval)
-# patches = [mpatches.Patch(color=colList[i], label=labels[i], alpha=alval*0.5) for i in range(len(colList))]
-# patches.append(mpatches.Patch(facecolor=LLcol, edgecolor=LHcol,hatch='////',alpha=alval*0.4,label=labels[3]))
-# patches.append(mpatches.Patch(facecolor=HHcol, edgecolor=LHcol,hatch='////',alpha=alval*0.4,label=labels[4]))
-# ax.legend(handles=patches, loc='upper right', borderaxespad=0.4, fontsize=8)
-# plt.fill_between(Xvec, YvecLHlo, YvecLL, hatch='////', facecolor=LLcol, edgecolor=LHcol, alpha=alval*0.2)
-# plt.fill_between(Xvec, YvecLL, np.repeat(-1, len(YvecLL)), facecolor=LLcol, alpha=alval*0.3)
-# plt.fill_between(Xvec, YvecLL, YvecLHhi, facecolor=LHcol, alpha=alval*0.3)
-# plt.fill_between(Xvec, YvecLHhi, np.repeat(1, len(YvecLHhi)), facecolor=HHcol, alpha=alval*0.3)
-# plt.fill_between(Xvec, YvecLHhi, YvecHH, hatch='////', facecolor=HHcol, edgecolor=LHcol, alpha=alval*0.2)
-# plt.text((Xmax*0.15)/Kpen, Ymax*0.2/Kpen, 'LL', color=LLcol, fontsize=15, fontweight='bold')
-# plt.text(0.4/Kpen, (Ymax*0.87)/Kpen, 'HH', color=HHcol, fontsize=15, fontweight='bold')
-# plt.text(Xmax*0.5/Kpen, Ymax*0.6/Kpen, 'LH', color=LHcol, fontsize=15, fontweight='bold')
-# plt.text(Xmax*0.39/Kpen, Ymax*0.01/Kpen, 'LL\n'+r'$\cap$'+'\nLH', color='black', fontsize=15, fontweight='bold',
-#          horizontalalignment='center', alpha=0.7)
-# plt.annotate('', xy=(0.59/Kpen, 0.01/Kpen), xytext=(0.65/Kpen, 0.013/Kpen), arrowprops=dict(arrowstyle="-", color='black'))
-# plt.text(Xmax*0.71/Kpen, Ymax*0.01/Kpen, 'LH\n'+r'$\cap$'+'\nHH', color='black', fontsize=15, fontweight='bold',
-#          horizontalalignment='center', alpha=0.7)
-# plt.annotate('', xy=(1.04/Kpen, 0.01/Kpen), xytext=(1.10/Kpen, 0.013/Kpen), arrowprops=dict(arrowstyle="-", color='black'))
-# ax.set_xbound(0, Xmax/Kpen)
-# ax.set_ybound(0, Ymax/Kpen)
-# plt.xlabel(r'$\theta^{\text{R}}$', fontsize=11)
-# plt.ylabel(r'$\theta^{\text{S}}$', fontsize=11, rotation=0, labelpad=14)
-plt.xlabel(r'$\theta^{\text{R}}$', fontsize=11)
-plt.ylabel(r'$\theta^{\text{S}}$', fontsize=11, rotation=0, labelpad=14)
-plt.savefig('SWplot2.png', dpi=300, bbox_inches='tight')  # Change for difft util values
+plt.xlabel(r'$\theta^{\text{R}}$ (retailer inspection probability)', fontsize=14)
+plt.ylabel(r'$\theta^{\text{S}}$ (retailer inspection probability)', fontsize=14, rotation=90, labelpad=7)
+plt.tick_params(axis='both', which='major', labelsize=12)
+plt.tight_layout()
+plt.savefig('SWplot1.png', dpi=300, bbox_inches='tight')  # Change for difft util values
 plt.show()
 
 
