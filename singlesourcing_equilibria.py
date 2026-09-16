@@ -303,3 +303,45 @@ for Xind, Xcurr in enumerate(Xvec):
 np.save('LLmat.npy', LLmat)
 np.save('LHmat.npy', LHmat)
 np.save('HHmat.npy', HHmat)
+
+# Plot
+b, cS, L, H = envirDict['b'], envirDict['cS'], envirDict['L'], envirDict['H']
+alval = 0.9
+fig = plt.figure()
+fig.suptitle(r'$b=$'+str(b)+', '+r'$c_S=$'+str(cS)+', '+r'$L=$'+str(L),
+             fontsize=18, fontweight='bold')
+ax = fig.add_subplot(111)
+
+eqcolors = ['red',  'blue',  'green']
+labels = ['LLFOC',   'LHFOC',  'HHFOC']
+
+matList = [LLmat, LHmat,HHmat]
+imlist = []
+for xind, x in enumerate(matList):
+    mycmap = matplotlib.colors.ListedColormap(['white', eqcolors[xind]], name='from_list', N=None)
+    im = ax.imshow(x.T, vmin=-1, vmax=0.8, aspect='auto',
+                            extent=(0, Xmax, 0, Ymax),
+                            origin="lower", cmap=mycmap, alpha=alval)
+    imlist.append(im)
+
+# Fill in any non-equilibria regions
+# Cthdist, Cbedist = (Ctheta_max)/numpts, (Cbeta_max)/numpts
+# for i in range(CthetaVec.shape[0]):
+#     for j in range(CbetaVec.shape[0]):
+#         if np.nansum(eqMats[:, i, j])==0:  # No equilibria here
+#             ax.add_patch(matplotlib.patches.Rectangle((CthetaVec[i],CbetaVec[j]),Cthdist,Cbedist,
+#                hatch='/////////',fill=False,linewidth=0,snap=False))
+
+legwidth = 20
+wraplabels = ['\n'.join(textwrap.wrap(labels[i], width=legwidth)) for i in range(len(labels))]
+patches = [mpatches.Patch(color=eqcolors[i], label=wraplabels[i], alpha=alval) for i in range(len(eqcolors))]
+          # +[mpatches.Patch(hatch=r'/////////',fill=False,linewidth=0,snap=False,label='1-sup. eq.')]
+
+# put those patched as legend-handles into the legend
+ax.legend(handles=patches, bbox_to_anchor=(1.3, 1.0), loc='upper right', borderaxespad=0.1, fontsize=8)
+ax.set_xbound(0, Xmax)
+ax.set_ybound(0, Ymax)
+ax.set_box_aspect(1)
+plt.xlabel(r'$X$', fontsize=14)
+plt.ylabel(r'$Y$', fontsize=14, rotation=0, labelpad=14)
+plt.show()
