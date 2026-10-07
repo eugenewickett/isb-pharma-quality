@@ -16,8 +16,8 @@ from scipy.stats import gaussian_kde
 import scipy.stats as sps
 
 # Sim settings
-N_SIM = 50
-np.random.seed(42)
+N_SIM = 10000
+np.random.seed(44)
 M = 1e3 # Big M value for when detection time doesn't occur
 
 # CITY-BASD INPUTS
@@ -26,7 +26,11 @@ lamb = 14  # frequency of testing; every lamb^th day a test occurs at every wast
 v = 0.90  # wastewater population coverage
 h_not_v = 0.0   # pop. proportion with HC coverage but no wastewater coverage
 beta_segment = 0.2  # concentration parameter of within-segement infection spread
-sitePopList = [150000, 200000, 350000]  # list of covered populations for each WES site  # TODO: Biswajit, please fill out with STP values
+sitePopProps = np.random.beta(3,4,size=30)
+sitePopProps = sitePopProps/np.sum(sitePopProps)
+cityPop = 10440000
+sitePopList = [x*cityPop for x in sitePopProps]  # list of covered populations for each WES site  # TODO: Biswajit, please fill out with STP values
+
 
 seg0_prop = 1 - v - h_not_v   # propor. NO healthcare, NO wastewater coverage
 seg1_prop = v - h + h_not_v   # propor. NO healthcare, YES wastewater coverage
@@ -47,7 +51,9 @@ LabA_chol, LabB_chol = -3.7, 1.93
 
 # Define a class for all newly generated infected patients
 class Patient:
-    def __init__(self, infectedTime, segment, parent='NA'):
+    def __init__(self, infectedTime, segment, parent='NA', verbose=False):
+        # if verbose:
+        #     print('Adding patient')
         self.segment = int(segment)  # Assigned segment
         self.parent = parent  # 'Index' or other patient object
         currSegProb = segprop_vec[segment] + beta_segment*(1 - segprop_vec[segment])
@@ -58,13 +64,15 @@ class Patient:
         self.segmentSpreadProbs = templist
         self.infectedTime = infectedTime  # Time of initial infection
         self.beginShedTime = infectedTime + np.random.randint(1, 10 + 1)  # high value is exclusive; # TODO: REMIND TO TRY DIFFERENT DISTRIBUTION HERE
+        # if verbose:
+        #     print('Adding shedding times')
         num_shed_days = np.random.randint(7, 14 + 1)  # Number of shedding/infectious days # TODO: REMIND TO TRY DIFFERENT DISTRIBUTION HERE
         self.shedLevelList = [10**11]*num_shed_days  # Shedding level each day of shedding window # TODO: REMIND TO TRY DIFFERENT DISTRIBUTION HERE, USING KNOWN SHEDDING LEVEL RANGE
         self.sym_b_time = infectedTime + np.random.randint(1, 5 + 1) # Symptom onset day # TODO: REMIND TO TRY DIFFERENT DISTRIBUTION HERE
         if segment in [2, 3]:  # Patient has healthcare coverage; find clinical diagnosis time
             clinPresVal = np.random.binomial(n=1, p=clin_pres_prob)
             if clinPresVal == 1:  # Patient shows up to clinic
-                self.clinPresTime = self.sym_b_time + np.random.randint(1, 7 + 1)  # Days after symptom onset when goes to clinic  # TODO: REMIND TO TRY DIFF DIST HERE
+                self.clinPresTime = self.sym_b_time + np.random.randint(1, 7)  # Days after symptom onset when goes to clinic  # TODO: REMIND TO TRY DIFF DIST HERE
                 clinPresShedAmt = self.shedLevelList[self.clinPresTime - self.sym_b_time]  # Assume this concentration is in sample to be tested
                 diagnosisVal = np.random.binomial(n=1, p=concentratProb(LabA_chol, LabB_chol, clinPresShedAmt))
                 if diagnosisVal == 1:  # Cholera detected in clinic; add in lab turnaround time
@@ -78,6 +86,8 @@ class Patient:
         else:   # No healthcare access
             self.clinPresTime = M
             self.clinDiagTime = M
+        if verbose:
+            print('Finding simexit')
         temp = [self.beginShedTime+num_shed_days, self.sym_b_time, self.clinPresTime, self.clinDiagTime]
         temp2 = [x for x in temp if x != M]
         self.simexittime = int(np.max(temp2))
@@ -146,7 +156,11 @@ for sim in range(N_SIM):  # Main simulation loop
     newInfectTimes = [int(pat0.beginShedTime + x) for x in temp]
 
     for newpatind in range(numOthersInfect):
-        patList.append(Patient(newInfectTimes[newpatind], newInfectSegments[newpatind], parent=pat0))
+        if verbose:
+            print('Adding patient at infect time '+str(newInfectTimes[newpatind])+', segment '+
+                  str(newInfectSegments[newpatind]))
+        patList.append(Patient(newInfectTimes[newpatind], newInfectSegments[newpatind], parent=pat0,
+                               verbose=verbose))
         clinDetectTimes.append(int(patList[-1].clinDiagTime))
 
     patFinishedInfectingList = [pat0]   # List of patients whose secondary infections have been added to patList
@@ -194,7 +208,11 @@ for sim in range(N_SIM):  # Main simulation loop
                 newInfectTimes = [int(pat.beginShedTime + x) for x in temp]
                 # Add new infections
                 for newpatind in range(numOthersInfect):
-                    patList.append(Patient(newInfectTimes[newpatind], newInfectSegments[newpatind], parent=pat))
+                    if verbose:
+                        print('Adding patient at infect time ' + str(newInfectTimes[newpatind]) + ', segment ' +
+                              str(newInfectSegments[newpatind]))
+                    patList.append(Patient(newInfectTimes[newpatind], newInfectSegments[newpatind], parent=pat,
+                                           verbose=verbose))
                     clinDetectTimes.append(int(patList[-1].clinDiagTime))
                 # Add current patient to finished list
                 patFinishedInfectingList.append(pat)
@@ -236,7 +254,6 @@ def printHists(simDetect_WES, simDetect_clin, M):
     topbarval = np.max(counts1)
     WESnoDetBar, WESnoDetBarht = bins1[-1] +10, (topbarval)*numNoWES/len(simDetect_WES)
     clinnoDetBar, clinnoDetBarht = bins1[-1] +12, (topbarval)*numNoClin/len(simDetect_clin)
-    # 4. Add the standalone bar to the end
     plt.bar(
         x=WESnoDetBar, height=WESnoDetBarht, width=bins1[2] - bins1[0], align='edge',
         color='darkgray', edgecolor='black', label='No WES detection')
@@ -265,11 +282,57 @@ def printHists(simDetect_WES, simDetect_clin, M):
     plt.show()
 
     # Histogram of WES less clinical detection times
+    tempWESclindiff = [simDetect_clin[i] - simDetect_WES[i] for i in range(len(simDetect_clin))
+                       if (simDetect_clin[i] < M and simDetect_WES[i] < M)]
+    numyesWESnoClin = len([i for i in range(len(simDetect_clin)) if (simDetect_clin[i] == M and simDetect_WES[i] < M)])
+    numnoWESyesClin = len([i for i in range(len(simDetect_clin)) if (simDetect_clin[i] < M and simDetect_WES[i] == M)])
+    numnoWESnoClin = len([i for i in range(len(simDetect_clin)) if (simDetect_clin[i] == M and simDetect_WES[i] == M)])
+    distMin, distMax = min(tempWESclindiff) - 1, max(tempWESclindiff)+1
+    binstouse = np.arange(distMin, distMax)
+    posDiff, negDiff = [x for x in tempWESclindiff if x>0], [x for x in tempWESclindiff if x<=0]
+    counts2, bins2, patches2 = plt.hist([negDiff, posDiff], bins=binstouse, density=True, alpha=alval,
+                                        color=['red', 'green'],
+                                        label=['', ''])
+    topbarval = np.max(counts2)
+    yesWESnoClinBar, yesWESnoClinBarht = bins2[-1] + 10, (topbarval) * numyesWESnoClin / len(simDetect_WES)
+    noWESyesClinBar, noWESyesClinBarht = bins2[-1] + 12, (topbarval) * numnoWESyesClin / len(simDetect_WES)
+    noWESnoClinBar, noWESnoClinBarht = bins2[-1] + 14, (topbarval) * numnoWESnoClin / len(simDetect_WES)
+    plt.bar(x=yesWESnoClinBar, height=yesWESnoClinBarht, width=bins2[2] - bins2[0], align='edge',
+        color='darkgray', edgecolor='black', label='WES, no clinical detection')
+    plt.bar(x=noWESyesClinBar, height=noWESyesClinBarht, width=bins1[2] - bins1[0], align='edge',
+        color='lightgray', edgecolor='black', label='Clinical, no WES detection')
+    plt.bar(x=noWESnoClinBar, height=noWESnoClinBarht, width=bins1[2] - bins1[0], align='edge',
+            color='dimgray', edgecolor='black', label='No clinical or WES detection')
+    text_x, text_y = yesWESnoClinBar + bins1[1] - bins1[0], yesWESnoClinBarht + (np.max(counts2) * 0.02)
+    plt.text(x=text_x, y=text_y, s=f"{numyesWESnoClin / len(simDetect_WES):.1%}",
+             ha='center', va='bottom', fontsize=10, fontweight='bold')
+    text_x, text_y = noWESyesClinBar + bins1[1] - bins1[0], noWESyesClinBarht + (np.max(counts2) * 0.02)
+    plt.text(x=text_x, y=text_y, s=f"{numnoWESyesClin / len(simDetect_WES):.1%}",
+             ha='center', va='bottom', fontsize=10, fontweight='bold')
+    text_x, text_y = noWESnoClinBar + bins1[1] - bins1[0], noWESnoClinBarht + (np.max(counts2) * 0.02)
+    plt.text(x=text_x, y=text_y, s=f"{numnoWESnoClin / len(simDetect_WES):.1%}",
+             ha='center', va='bottom', fontsize=10, fontweight='bold')
+    plt.legend()
+    # Add density lines
+    kde = gaussian_kde(tempWESclindiff)
+    x_range = np.linspace(min(tempWESclindiff), max(tempWESclindiff), 1000)
+    plt.plot(x_range, kde(x_range), color='gray', linewidth=4, label="Difference density")
+    plt.xlabel('Clinical less WES detection time (days)', fontsize=12)
+    plt.ylabel('Frequency', fontsize=12)
+    plt.title('Difference in WES and clinical surveillance detection\nHyderabad - Cholera',
+              fontsize=14)
+    plt.tight_layout()
+    plt.show()
+
+    return np.quantile(tempWESclindiff, 0.5)
+
+medianDiff = printHists(simDetect_WES, simDetect_clin, M)
 
 
-    return
-
-
+# TODO: Distribution of branches before WES/clinical detection
+# TODO: Distribution of infected patients upon '' detection
+# TODO: Median detection diff vs. beta parameter [0.01 to 0.5]
+# TODO: Median WES detection vs WES coverage
 
 
 
