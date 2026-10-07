@@ -265,7 +265,7 @@ def printHists(simDetect_WES, simDetect_clin, M):
     plt.show()
 
     # Histogram of WES less clinical detection times
-    
+
 
     return
 
