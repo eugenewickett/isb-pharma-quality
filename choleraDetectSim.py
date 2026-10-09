@@ -686,8 +686,6 @@ plt.show()
 
 # TODO: Distribution of branches before WES/clinical detection
 # TODO: Distribution of infected patients upon '' detection
-# TODO: Median WES detection vs WES coverage by sites added
-# TODO: Median WES detection vs WES frequency
 
 ###################
 # Plot of median WES detection times vs number of sites
@@ -858,8 +856,6 @@ for numsitesind in numSitesArr:
 lo_err_WES = [numSitesMedianList[i] - numSitesMedianList_lo[i] for i in range(len(numSitesMedianList))]
 hi_err_WES = [numSitesMedianList_hi[i] - numSitesMedianList[i]  for i in range(len(numSitesMedianList))]
 asym_err_WES = [lo_err_WES, hi_err_WES]
-# mid_WES = [(betaMedianList_WES_hi[i]+betaMedianList_WES_lo[i])/2 for i in range(len(hi_err_WES))]
-# mid_clin = [(betaMedianList_clin_hi[i]+betaMedianList_clin_lo[i])/2 for i in range(len(hi_err_clin))]
 plt.errorbar(x=sitePropsCumulCov, y=numSitesMedianList, yerr=asym_err_WES, fmt='o',
              color='darkblue', ecolor='cornflowerblue', elinewidth=2, capsize=8,
              capthick=2)
@@ -868,5 +864,176 @@ plt.ylabel('Median detection time', fontsize=12)
 plt.title(r'Median detection time vs. number of WES sites'+'\nHyderabad - Cholera',
           fontsize=14)
 plt.ylim([0, 1.1*np.max(numSitesMedianList)])
+plt.tight_layout()
+plt.show()
+
+###################
+# Plot of median WES detection times vs frequency
+###################
+v, h_not_v = 0.9, 0.0 # Revert
+seg0_prop = 1 - v - h_not_v  # propor. NO healthcare, NO wastewater coverage
+seg1_prop = v - h + h_not_v  # propor. NO healthcare, YES wastewater coverage
+seg2_prop = h_not_v  # propor. YES healthcare, NO wastewater coverage
+seg3_prop = h - h_not_v  # propor. YES healthcare, YES wastewater coverage
+segprop_vec = [seg0_prop, seg1_prop, seg2_prop, seg3_prop]
+
+# Place frequency list here
+lambList = [2, 4, 7, 9, 11, 14, 16, 18, 21, 23, 25, 28]
+
+lambMedianList = []
+lambMedianList_lo = []
+lambMedianList_hi = []
+N_SIM = 1000
+
+for currlamb in lambList:
+    print('Evaluating using WES testing period: every ' + str(currlamb) + str(' days'))
+
+    # Storage of detection times across simulations
+    simDetect_WES, simDetect_clin = [], []
+
+    # For printing output
+    verbose = False
+
+    for sim in range(N_SIM):  # Main simulation loop
+        if verbose:
+            print('Starting sim '+str(sim)+'...')
+        R_0 = np.random.uniform(1.7, 2.6)  # NON-integer mean reproduction number; unknown range;
+        #   For cholera, considered the number of SYMPTOMATIC patients created
+        k_0 = 4.5  # Dispersion parameter
+
+        infectSitePop = int(np.random.choice(sitePops_sort[:(numsitesind+1)], size=1,
+                                             p=sitePopPropLists[numsitesind]/np.sum(sitePopPropLists[numsitesind]))[0])
+
+        # For python functions
+        nbinom_n, nbinom_p = k_0, R_0 / (R_0 + (R_0**2)/k_0)
+
+        # Index patient; choose initial segment purely randomly
+        pat0 = Patient(0, np.random.choice([0, 1, 2, 3], size=1, p=segprop_vec)[0],
+                       beta_segment, parent='Index')
+        patList = [pat0]
+
+        # Intialize list of clinical detection times
+        clinDetectTimes = [int(pat0.clinDiagTime)]
+
+        # Initialize first day of WES testing POST-infection of index case
+        WESTestTime = np.random.randint(0, currlamb)
+
+        # Infect other patients; first, how many, according to (R_0, k_0)
+        numOthersInfect = sps.nbinom.rvs(nbinom_n, nbinom_p)
+        # Which segments are these patients a part of? Depends on segment spread
+        newInfectSegments = np.random.choice([0, 1, 2, 3], size=numOthersInfect, p=pat0.segmentSpreadProbs)
+        newInfectSegments = newInfectSegments.tolist()
+        # Which times do these infections occur? Sample uniformly across shedding time
+        temp = np.random.choice(np.arange(len(pat0.shedLevelList)),
+                                          p = pat0.shedLevelList/np.sum(pat0.shedLevelList),
+                                          size = numOthersInfect)
+        newInfectTimes = [int(pat0.beginShedTime + x) for x in temp]
+
+        for newpatind in range(numOthersInfect):
+            if verbose:
+                print('Adding patient at infect time '+str(newInfectTimes[newpatind])+', segment '+
+                      str(newInfectSegments[newpatind]))
+            patList.append(Patient(newInfectTimes[newpatind], newInfectSegments[newpatind],
+                                   beta_segment, parent=pat0, verbose=verbose))
+            clinDetectTimes.append(int(patList[-1].clinDiagTime))
+
+        patFinishedInfectingList = [pat0]   # List of patients whose secondary infections have been added to patList
+
+        # We now step through each time step until one of two things happens:
+        #   1) We have a clinical detection AND a WES detection, or
+        #   2) The outbreak has died out on its own before any detection; big M is used for non-detection
+
+        # Initialize a list of patients whose exit time has been exceeded; stop once the length of this list matches
+        #   the number of patients we've generated
+        patExitList = []
+        WESDetect, clinDetect = False, False  # Booleans for tracking if we've detected in each surveillance system
+        curr_t = 0  # initialize the start day of the outbreak
+        # Continue until all patients have exited the simulation OR both detection times have been identified
+        # OR until max time reached
+        while (len(patList) > len(patExitList)) and (WESDetect is False or clinDetect is False) and (curr_t < M):
+            if verbose:
+                print('Day ' + str(curr_t) + ' starting...')
+            # Scan if we've reached a clinical detection time
+            if (min(clinDetectTimes) == curr_t) and (clinDetect is False):
+                simDetect_clin.append(curr_t)
+                clinDetect = True
+            if verbose:
+                print('Clinical detection scanned')
+            # Do WES measurement if on a scheduled WES day
+            if np.mod(curr_t, currlamb) == WESTestTime and (WESDetect is False):
+                WESresult = GetWESResult(patList, curr_t, infectSitePop)
+                if WESresult is True:
+                    simDetect_WES.append(curr_t)
+                    WESDetect = True
+            if verbose:
+                print('WES detection scanned')
+            # Add new infections if we've reached the beginning of any patient's shedding time
+            for pat in patList:
+                if (pat.beginShedTime == curr_t) and (pat not in patFinishedInfectingList):
+                    # Infect other patients; first, how many, according to (R_0, k_0)
+                    numOthersInfect = sps.nbinom.rvs(nbinom_n, nbinom_p)
+                    # Which segments are these patients a part of? Depends on segment spread
+                    newInfectSegments = np.random.choice([0, 1, 2, 3], size=numOthersInfect, p=pat.segmentSpreadProbs)
+                    newInfectSegments = newInfectSegments.tolist()
+                    # Which times do these infections occur? Sample uniformly across shedding time
+                    temp = np.random.choice(np.arange(len(pat.shedLevelList)),
+                                            p=pat.shedLevelList / np.sum(pat.shedLevelList),
+                                            size=numOthersInfect)
+                    newInfectTimes = [int(pat.beginShedTime + x) for x in temp]
+                    # Add new infections
+                    for newpatind in range(numOthersInfect):
+                        if verbose:
+                            print('Adding patient at infect time ' + str(newInfectTimes[newpatind]) + ', segment ' +
+                                  str(newInfectSegments[newpatind]))
+                        patList.append(Patient(newInfectTimes[newpatind], newInfectSegments[newpatind],
+                                               beta_segment, parent=pat, verbose=verbose))
+                        clinDetectTimes.append(int(patList[-1].clinDiagTime))
+                    # Add current patient to finished list
+                    patFinishedInfectingList.append(pat)
+            if verbose:
+                print('New infections added')
+            # Add patients to exit list if simexittime exceeded
+            for pat in patList:
+                if (pat not in patExitList) and (pat.simexittime < curr_t):
+                    patExitList.append(pat)
+                    # Put default detection times if all patients have exited
+                    if len(patList) == len(patExitList):
+                        if WESDetect is False:
+                            simDetect_WES.append(M)
+                        if clinDetect is False:
+                            simDetect_clin.append(M)
+            if verbose:
+                print('Exit patients compiled')
+            # Increment time step
+            curr_t += 1
+            if curr_t == M:  # Put default values for detection times
+                if WESDetect is False:
+                    simDetect_WES.append(M)
+                if clinDetect is False:
+                    simDetect_clin.append(M)
+
+    lambMedianList.append(np.quantile(simDetect_WES, 0.5))
+    res_WES = stats.bootstrap((simDetect_WES,), np.median, confidence_level=0.95,
+                          method='percentile', n_resamples=2000)
+
+    lower_ci_WES, upper_ci_WES = res_WES.confidence_interval.low, res_WES.confidence_interval.high
+    lambMedianList_lo.append(lower_ci_WES)
+    lambMedianList_hi.append(upper_ci_WES)
+
+# Plot
+# Use test days per year instead of frequency
+x_lamb = [int(round(365/x)) for x in lambList]
+
+lo_err_WES = [lambMedianList[i] - lambMedianList_lo[i] for i in range(len(lambMedianList))]
+hi_err_WES = [lambMedianList_hi[i] - lambMedianList[i] for i in range(len(lambMedianList))]
+asym_err_WES = [lo_err_WES, hi_err_WES]
+plt.errorbar(x=x_lamb, y=lambMedianList, yerr=asym_err_WES, fmt='o',
+             color='darkblue', ecolor='cornflowerblue', elinewidth=2, capsize=8,
+             capthick=2)
+plt.xlabel(r'WES test days per year', fontsize=12)
+plt.ylabel('Median detection time', fontsize=12)
+plt.title(r'Median detection time vs. WES frequency'+'\nHyderabad - Cholera',
+          fontsize=14)
+plt.ylim([0, 1.1*np.max(lambMedianList)])
 plt.tight_layout()
 plt.show()
