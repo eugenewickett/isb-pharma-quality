@@ -35,9 +35,6 @@ cityDict = {'popProp_HC': 0.53, 'WESfreq': 14, 'popProp_WES': 0.90, 'popProp_HCn
             'withinSegIntensity': 0.2, 'WESsitePopProps': sitePopProps/np.sum(sitePopProps),
             'cityPop': 10440000, 'WESsitePopList': sitePopList}
 
-
-
-
 seg0_prop = 1 - v - h_not_v   # propor. NO healthcare, NO wastewater coverage
 seg1_prop = v - h + h_not_v   # propor. NO healthcare, YES wastewater coverage
 seg2_prop = h_not_v           # propor. YES healthcare, NO wastewater coverage
@@ -356,6 +353,49 @@ def printHists(simDetect_WES, simDetect_clin, infectedPats_WES, infectedPats_cli
     plt.xlabel('Clinical less WES detection time (days)', fontsize=12)
     plt.ylabel('Frequency', fontsize=12)
     plt.title('Difference in WES and clinical surveillance detection\nHyderabad - Cholera',
+              fontsize=14)
+    plt.tight_layout()
+    plt.show()
+
+    # Histogram of min(WES,clinical) vs clinical alone
+    # tempWES, tempclin = [x for x in simDetect_WES if x < M], [x for x in simDetect_clin if x < M]
+    simDetect_Min = [min(simDetect_WES[i], simDetect_clin[i]) for i in range(len(simDetect_WES))]
+    tempMin = [x for x in simDetect_Min if x < M]
+    numNoDet, numNoClin = len(simDetect_Min) - len(tempMin), len(simDetect_clin) - len(tempclin)
+    distMax = max(max(tempMin), max(tempclin))
+    binstouse = np.arange(distMax)
+    alval = 0.6
+
+    counts1, bins1, patches1 = plt.hist([tempMin, tempclin], bins=binstouse, density=True, alpha=alval,
+                                        color=['blue', 'red'],
+                                        label=['Minimum time for WES/clinical', 'Time for clinical only'])
+    # Add counts of non-detection
+    topbarval = np.max(counts1)
+    WESnoDetBar, WESnoDetBarht = bins1[-1] + 10, (topbarval) * numNoDet / len(simDetect_Min)
+    clinnoDetBar, clinnoDetBarht = bins1[-1] + 12, (topbarval) * numNoClin / len(simDetect_clin)
+    plt.bar(
+        x=WESnoDetBar, height=WESnoDetBarht, width=bins1[2] - bins1[0], align='edge',
+        color='darkgray', edgecolor='black', label='No detection')
+    plt.bar(
+        x=clinnoDetBar, height=clinnoDetBarht, width=bins1[2] - bins1[0], align='edge',
+        color='lightgray', edgecolor='black', label='No clinical detection')
+    text_x, text_y = WESnoDetBar + bins1[1] - bins1[0], WESnoDetBarht + (np.max(counts1) * 0.02)
+    plt.text(x=text_x, y=text_y, s=f"{numNoDet / len(simDetect_Min):.1%}",
+             ha='center', va='bottom', fontsize=10, fontweight='bold')
+    text_x, text_y = clinnoDetBar + bins1[1] - bins1[0], clinnoDetBarht + (np.max(counts1) * 0.02)
+    plt.text(x=text_x, y=text_y, s=f"{numNoClin / len(simDetect_clin):.1%}",
+             ha='center', va='bottom', fontsize=10, fontweight='bold')
+    plt.legend()
+    # Add density lines
+    kdeWES = gaussian_kde(tempMin)
+    x_rangeWES = np.linspace(min(tempMin), max(tempMin), 1000)
+    plt.plot(x_rangeWES, kdeWES(x_rangeWES), color='skyblue', linewidth=4, label="min(WES,Clin) density")
+    kdeclin = gaussian_kde(tempclin)
+    x_rangeclin = np.linspace(min(tempclin), max(tempclin), 1000)
+    plt.plot(x_rangeclin, kdeclin(x_rangeclin), color='pink', linewidth=4, label="Clin density")
+    plt.xlabel('Time until outbreak detection (days)', fontsize=12)
+    plt.ylabel('Frequency', fontsize=12)
+    plt.title('Detection times under WES/clinical vs. only clinical\nHyderabad - Cholera',
               fontsize=14)
     plt.tight_layout()
     plt.show()
@@ -964,7 +1004,7 @@ plt.hlines(upper_ci_clin, xmin=sitePropsCumulCov[0], xmax=sitePropsCumulCov[-1],
            linestyles='dashed',color='tomato', alpha=0.5)
 plt.xlabel(r'Pop. proportion covered under WES', fontsize=12)
 plt.ylabel('Median detection time', fontsize=12)
-plt.title(r'Median detection time vs. number of WES sites'+'\nHyderabad - Cholera',
+plt.title(r'Median detection time vs. WES coverage'+'\nHyderabad - Cholera',
           fontsize=14)
 plt.ylim([0, 1.1*np.max(numSitesMedianList)])
 plt.legend()
@@ -974,7 +1014,7 @@ plt.show()
 ###################
 # Plot of median WES detection times vs frequency
 ###################
-v, h_not_v = 0.9, 0.0 # Revert
+v, h_not_v = 0.9, 0.0  # Revert
 seg0_prop = 1 - v - h_not_v  # propor. NO healthcare, NO wastewater coverage
 seg1_prop = v - h + h_not_v  # propor. NO healthcare, YES wastewater coverage
 seg2_prop = h_not_v  # propor. YES healthcare, NO wastewater coverage
