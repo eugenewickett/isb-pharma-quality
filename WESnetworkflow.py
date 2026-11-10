@@ -198,7 +198,8 @@ def load_inputs(file_path: str = "networkflowFiles/input_data_big.xlsx"):
 
 
 
-def solve_cost_optimization(file_path: str = "networkflowFiles/input_data.xlsx", verbose: bool = True):
+def solve_cost_optimization(file_path: str = "networkflowFiles/input_data_big.xlsx", verbose: bool = True,
+                            timeLimit: float = 500, relativeGap: float = 0.01):
     """
     Constructs and solves the sample routing and lab optimization model.
     """
@@ -329,126 +330,155 @@ def solve_cost_optimization(file_path: str = "networkflowFiles/input_data.xlsx",
 
     # 7. Solve
     # solver = pulp.PULP_CBC_CMD(msg='verbose')
-    solver = pulp.PULP_CBC_CMD(msg=True,
-        timeLimit=100,
-        gapRel=0.01
+    # cbc_options = [
+    #     "presolve more",  # More model simplification
+    #     # "-pump 1",  # Use Feasibility Pump to quickly find better solutions
+    #     # "-heuristics on",  # Enable all primal heuristics
+    #     # "-cuts on",  # More cutting planes
+    #     # "-passC 40"  # More iterations generating root-node cuts
+    # ]
+
+    # solver = pulp.PULP_CBC_CMD(msg=True,
+    #                             timeLimit=400,
+    #                             gapRel=0.05,
+    #                             options=cbc_options
+    # )
+    # log_file = "highs_solver.log"
+    solver = pulp.HiGHS(msg=verbose,
+                        timeLimit=timeLimit,
+                        gapRel=relativeGap,
+                        #logPath=log_file,
     )
     print("\n Solving the optimization model: ")
     print(model)
     print("\n")
+
     status_code = model.solve(solver)
-    status_str = pulp.LpStatus[status_code]
     total_cost = pulp.value(model.objective)
 
-    # TODO: RESUME HERE
-    for i in cities:
-        for j in labs:
-            if y[i][j].varValue > 0:
-                print(y[i][j])
-
-
-    # 8. Extract Solution DataFrames
-    flow_list = []
-    for i in cities:
-        for j in labs:
-            val = x[i][j].varValue
-            if val and val > 0:
-                var_shipping = val * unit_costs[i, j]
-                fixed_route = route_fixed_costs[i, j]
-                flow_list.append({
-                    'City': i,
-                    'Lab': j,
-                    'Sample Flow (x_ij)': int(val),
-                    'Route Active (y_ij)': int(y[i][j].varValue),
-                    'Unit Shipping Cost': unit_costs[i, j],
-                    'Var Shipping Total': var_shipping,
-                    'Route Fixed Cost': fixed_route,
-                    'Total Route Cost': var_shipping + fixed_route
-                })
-    flow_results_df = pd.DataFrame(flow_list)
-
-    lab_list = []
+    # Breakdown of new resources
+    new_resource_list = []
     for j in labs:
-        is_open = int(w[j].varValue) if w[j].varValue else 0
-        num_batches = int(z[j].varValue) if z[j].varValue else 0
-        samples_received = sum(x[i][j].varValue for i in cities if x[i][j].varValue)
-        fixed_lab = is_open * lab_fixed_costs[j]
-        total_batch = num_batches * batch_costs[j]
+        for l in resources:
+            if u[j][l].varValue > 0:
+                new_resource_list.append({
+                    'Lab': j,
+                    'Resource': l,
+                    'Number procured': int(u[j][l].varValue)
+                })
+    new_resource_df = pd.DataFrame(new_resource_list)
 
-        lab_list.append({
+    # Gather active routes
+    route_list = []
+    for i in cities:
+        for j in labs:
+            if y[i][j].varValue == 1:
+                for k in pathogens:
+                    route_list.append({
+                        'City': i,
+                        'Lab': j,
+                        'Pathogen': k,
+                        'Sample Flow': int(x[i][j][k].varValue)
+                    })
+    routes_df = pd.DataFrame(route_list)
+
+    # Where new labs are set up
+    new_lab_list = []
+    for j in labs:
+        if W[j].varValue == 1 and lab_fixed_setup_costs[j] > 0.0:
+            new_lab_list.append({
+                'Lab': j
+            })
+    new_lab_df = pd.DataFrame(new_lab_list)
+
+    # Gather which pathogens each lab is equipped for
+    lab_pathgoen_equipped_list = []
+    for j in labs:
+        tempList = []
+        for k in pathogens:
+            equipped_Bool = False
+            for l in resources:
+                if w[j][k][l].varValue == 1:
+                    equipped_Bool = True
+            if equipped_Bool == True:
+                tempList.append('Yes')
+            elif equipped_Bool == False:
+                tempList.append('No')
+        lab_pathgoen_equipped_list.append({
             'Lab': j,
-            'Lab Open (w_j)': is_open,
-            'Total Samples Received': int(samples_received),
-            'Lab Capacity': int(capacities[j]),
-            'Capacity Utilization (%)': round((samples_received / capacities[j]) * 100, 2),
-            'Batch Count (z_j)': num_batches,
-            'Batch Size': int(batch_sizes[j]),
-            'Fixed Setup Cost': fixed_lab,
-            'Batch Testing Cost': total_batch,
-            'Total Lab Cost': fixed_lab + total_batch
+            pathogens[0]: tempList[0],
+            pathogens[1]: tempList[1],
+            pathogens[2]: tempList[2]
         })
-    lab_results_df = pd.DataFrame(lab_list)
-
-    fixed_route_total = flow_results_df['Route Fixed Cost'].sum() if not flow_results_df.empty else 0
-    var_shipping_total = flow_results_df['Var Shipping Total'].sum() if not flow_results_df.empty else 0
-    fixed_lab_total = lab_results_df['Fixed Setup Cost'].sum() if not lab_results_df.empty else 0
-    batch_cost_total = lab_results_df['Batch Testing Cost'].sum() if not lab_results_df.empty else 0
-
-    cost_summary_df = pd.DataFrame([
-        {'Category': 'Fixed Route Activation', 'Amount (₹)': fixed_route_total},
-        {'Category': 'Variable Shipping', 'Amount (₹)': var_shipping_total},
-        {'Category': 'Fixed Lab Opening', 'Amount (₹)': fixed_lab_total},
-        {'Category': 'Batch Testing', 'Amount (₹)': batch_cost_total},
-        {'Category': 'TOTAL MINIMIZED COST', 'Amount (₹)': total_cost}
+    lab_pathgoen_equipped_df = pd.DataFrame(lab_pathgoen_equipped_list)
+    # Breakdown of costs in objective
+    soln_cost_df = pd.DataFrame([
+        {'Category': 'Route costs', 'Amount': route_costs.value()},
+        {'Category': 'Processing costs', 'Amount': process_costs.value()},
+        {'Category': 'New lab costs', 'Amount': new_lab_costs.value()},
+        {'Category': 'New resource costs', 'Amount': new_resource_costs.value()},
+        {'Category': 'Lab pathogen-equipping fixed costs', 'Amount': lab_equip_costs.value()},
+        {'Category': 'Lab batch-processing costs', 'Amount': lab_batch_processing_costs.value()},
+        {'Category': 'TOTAL MINIMIZED COST', 'Amount': total_cost}
     ])
 
-    return status_str, total_cost, flow_results_df, lab_results_df, cost_summary_df
+    return soln_cost_df, routes_df, new_resource_df, new_lab_df, lab_pathgoen_equipped_df
 
 
-def export_to_excel(flow_results_df: pd.DataFrame,
-                    lab_results_df: pd.DataFrame,
-                    cost_summary_df: pd.DataFrame,
-                    output_path: str = "networkflowFiles/optimization_data.xlsx"):
+def export_to_excel(soln_cost_df: pd.DataFrame,
+                    routes_df: pd.DataFrame,
+                    new_resource_df: pd.DataFrame,
+                    new_lab_df: pd.DataFrame,
+                    lab_pathgoen_equipped_df: pd.DataFrame,
+                    output_path: str = "networkflowFiles/opt_output.xlsx"):
     """
     Exports the optimization solution tables to an Excel workbook with multiple sheets.
     """
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with pd.ExcelWriter(output_path) as writer:
-        cost_summary_df.to_excel(writer, sheet_name='Cost_Summary', index=False)
-        flow_results_df.to_excel(writer, sheet_name='Route_Allocation', index=False)
-        lab_results_df.to_excel(writer, sheet_name='Lab_Utilization', index=False)
+        soln_cost_df.to_excel(writer, sheet_name='Cost_Summary', index=False)
+        routes_df.to_excel(writer, sheet_name='Route_Allocation', index=False)
+        new_resource_df.to_excel(writer, sheet_name='Resources_Procured', index=False)
+        new_lab_df.to_excel(writer, sheet_name='New_Labs', index=False)
+        lab_pathgoen_equipped_df.to_excel(writer, sheet_name='Lab_Pathogen_Equipped', index=False)
     print(f"✓ Results successfully saved to: {output_path}")
 
 
-def main():
-    input_file = "networkflowFiles/input_data_big.xlsx"
-    output_file = "networkflowFiles/optimization_data.xlsx"
+# def main():
+#     input_file = "networkflowFiles/input_data_big.xlsx"
+#     output_file = "networkflowFiles/optimization_data.xlsx"
+#
+#     # 1. Generate sample data if not present
+#     if not os.path.exists(input_file):
+#         generate_sample_excel(input_file)
+#
+#     print("\n==================================================")
+#     print(" RUNNING SAMPLE ROUTING & LAB OPTIMIZATION")
+#     print("==================================================")
+#
+#     # 2. Run solver
+#     status_str, total_cost, flow_df, lab_df, cost_df = solve_cost_optimization(
+#         file_path=input_file,
+#         verbose=True
+#     )
+#
+#     # 3. Print Output Decomposition
+#     print(f"Status: {status_str}")
+#     print(f"Total Operational Cost: ₹{total_cost:,.2f}\n")
+#     print("--- COST DECOMPOSITION ---")
+#     print(cost_df.to_string(index=False))
+#
+#     # 4. Save results to Excel
+#     export_to_excel(flow_df, lab_df, cost_df, output_file)
 
-    # 1. Generate sample data if not present
-    if not os.path.exists(input_file):
-        generate_sample_excel(input_file)
 
-    print("\n==================================================")
-    print(" RUNNING SAMPLE ROUTING & LAB OPTIMIZATION")
-    print("==================================================")
+# if __name__ == "__main__":
+#     main()
 
-    # 2. Run solver
-    status_str, total_cost, flow_df, lab_df, cost_df = solve_cost_optimization(
-        file_path=input_file,
-        verbose=True
-    )
+soln_cost_df, routes_df, new_resource_df, new_lab_df, \
+    lab_pathgoen_equipped_df = solve_cost_optimization("networkflowFiles/input_data_big.xlsx", verbose=True,
+                            timeLimit=500, relativeGap=0.05)
 
-    # 3. Print Output Decomposition
-    print(f"Status: {status_str}")
-    print(f"Total Operational Cost: ₹{total_cost:,.2f}\n")
-    print("--- COST DECOMPOSITION ---")
-    print(cost_df.to_string(index=False))
+export_to_excel(soln_cost_df, routes_df, new_resource_df, new_lab_df, lab_pathgoen_equipped_df,
+                    output_path="networkflowFiles/opt_output.xlsx")
 
-    # 4. Save results to Excel
-    export_to_excel(flow_df, lab_df, cost_df, output_file)
-
-
-if __name__ == "__main__":
-    main()
-
-generate_sample_excel()
