@@ -360,7 +360,7 @@ def solve_cost_optimization(file_path: str = "networkflowFiles/input_data_big.xl
     new_resource_list = []
     for j in labs:
         for l in resources:
-            if u[j][l].varValue > 0:
+            if u[j][l].varValue > 0.8:
                 new_resource_list.append({
                     'Lab': j,
                     'Resource': l,
@@ -381,6 +381,19 @@ def solve_cost_optimization(file_path: str = "networkflowFiles/input_data_big.xl
                         'Sample Flow': int(x[i][j][k].varValue)
                     })
     routes_df = pd.DataFrame(route_list)
+
+    # Summarize number of labs used by each city
+    route_summary_list = []
+    for i in cities:
+        numLabs = 0
+        for j in labs:
+            if y[i][j].varValue == 1:
+                numLabs += 1
+        route_summary_list.append({
+            'City': i,
+            'Labs Used': numLabs,
+        })
+    routes_summary_df = pd.DataFrame(route_summary_list)
 
     # Where new labs are set up
     new_lab_list = []
@@ -422,11 +435,12 @@ def solve_cost_optimization(file_path: str = "networkflowFiles/input_data_big.xl
         {'Category': 'TOTAL MINIMIZED COST', 'Amount': total_cost}
     ])
 
-    return soln_cost_df, routes_df, new_resource_df, new_lab_df, lab_pathgoen_equipped_df
+    return soln_cost_df, routes_df, routes_summary_df, new_resource_df, new_lab_df, lab_pathgoen_equipped_df
 
 
 def export_to_excel(soln_cost_df: pd.DataFrame,
                     routes_df: pd.DataFrame,
+                    routes_summary_df: pd.DataFrame,
                     new_resource_df: pd.DataFrame,
                     new_lab_df: pd.DataFrame,
                     lab_pathgoen_equipped_df: pd.DataFrame,
@@ -438,6 +452,7 @@ def export_to_excel(soln_cost_df: pd.DataFrame,
     with pd.ExcelWriter(output_path) as writer:
         soln_cost_df.to_excel(writer, sheet_name='Cost_Summary', index=False)
         routes_df.to_excel(writer, sheet_name='Route_Allocation', index=False)
+        routes_summary_df.to_excel(writer, sheet_name='Route_Allocation_Summary', index=False)
         new_resource_df.to_excel(writer, sheet_name='Resources_Procured', index=False)
         new_lab_df.to_excel(writer, sheet_name='New_Labs', index=False)
         lab_pathgoen_equipped_df.to_excel(writer, sheet_name='Lab_Pathogen_Equipped', index=False)
@@ -475,10 +490,10 @@ def export_to_excel(soln_cost_df: pd.DataFrame,
 # if __name__ == "__main__":
 #     main()
 
-soln_cost_df, routes_df, new_resource_df, new_lab_df, \
+soln_cost_df, routes_df, routes_summary_df, new_resource_df, new_lab_df, \
     lab_pathgoen_equipped_df = solve_cost_optimization("networkflowFiles/input_data_big.xlsx", verbose=True,
-                            timeLimit=500, relativeGap=0.05)
+                            timeLimit=50, relativeGap=0.05)
 
-export_to_excel(soln_cost_df, routes_df, new_resource_df, new_lab_df, lab_pathgoen_equipped_df,
-                    output_path="networkflowFiles/opt_output.xlsx")
+export_to_excel(soln_cost_df, routes_df, routes_summary_df, new_resource_df, new_lab_df, lab_pathgoen_equipped_df,
+                output_path="networkflowFiles/opt_output.xlsx")
 
